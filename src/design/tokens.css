@@ -1,0 +1,606 @@
+/* ================================================================
+   PatchLab tokens — generated from DESIGN.md. The world stays ashen;
+   saturation is reserved for the traced signal path.
+   ================================================================ */
+
+:root {
+  --canvas: #0a0c0f;
+  --grid-dot: #1a1e25;
+  --surface: #12151a;
+  --surface-raised: #171b21;
+  --border: #262c35;
+  --border-active: #9aa3af;
+  --text-primary: #e8eaed;
+  --text-secondary: #8a919c;
+  --text-disabled: #4a505a;
+  --wire-idle: #3a404a;
+  --signal-1: #2ecc71;
+  --signal-2: #ff8a1e;
+  --signal-3: #ffc933;
+  --signal-4: #3b9cff;
+  --danger: #ff4d4d;
+  --meter-rms: #2ecc71;
+  --meter-peak: #ffc933;
+  --meter-clip: #ff4d4d;
+
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --font-data: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-active);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------ shell */
+
+.pl-app {
+  display: grid;
+  grid-template-rows: 48px 1fr;
+  height: 100%;
+}
+
+.pl-main {
+  display: grid;
+  grid-template-columns: 216px 1fr;
+  min-height: 0;
+}
+
+.pl-canvas-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.react-flow {
+  background: var(--canvas);
+}
+
+/* ----------------------------------------------------------- topbar */
+
+.pl-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+}
+
+.pl-brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-right: 4px;
+  user-select: none;
+}
+
+.pl-brand__accent {
+  color: var(--text-secondary);
+  font-weight: 450;
+}
+
+.pl-name {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font: 500 13px var(--font-ui);
+  padding: 5px 8px;
+  width: 200px;
+  transition: border-color 120ms ease-out, color 120ms ease-out;
+}
+
+.pl-name:hover,
+.pl-name:focus {
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.pl-topbar__spacer {
+  flex: 1;
+}
+
+.pl-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font: 500 12px var(--font-ui);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.pl-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.pl-btn--danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* The Start Audio pill is the ONLY colored idle element on screen. */
+.pl-start {
+  background: var(--signal-1);
+  border: none;
+  border-radius: 999px;
+  color: #06120b;
+  font: 600 12px var(--font-ui);
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.pl-start.is-running {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--signal-1);
+  font-weight: 500;
+}
+
+/* ---------------------------------------------------------- palette */
+
+.pl-palette {
+  background: var(--surface-raised);
+  border-right: 1px solid var(--border);
+  padding: 12px 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pl-palette__eyebrow {
+  font: 600 10px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  padding: 0 6px 6px;
+}
+
+.pl-palette__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font: 450 13px var(--font-ui);
+  padding: 7px 8px;
+  cursor: grab;
+  text-align: left;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.pl-palette__item:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.pl-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-disabled);
+  flex: none;
+}
+
+.pl-palette__hint {
+  margin-top: auto;
+  padding: 8px 6px 2px;
+  color: var(--text-disabled);
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------- node */
+
+.pl-node {
+  width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.pl-node.is-selected {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 1px var(--border-active);
+}
+
+.pl-node.on-path {
+  border-color: var(--border-active);
+}
+
+.pl-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+}
+
+.pl-node__title {
+  font: 600 13px var(--font-ui);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-node.on-path .pl-node__title {
+  color: var(--text-primary);
+}
+
+.pl-meter {
+  width: 44px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+/* --------------------------------------------------------- pin rows */
+
+.pl-pinrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+.pl-pinrow + .pl-pinrow {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.pl-pinrow.is-out {
+  flex-direction: row-reverse;
+}
+
+.pl-pinrow:hover {
+  color: var(--text-primary);
+}
+
+.pl-pinrow__index {
+  font: 500 11px var(--font-data);
+  color: var(--text-disabled);
+  min-width: 10px;
+}
+
+.pl-pinrow__label {
+  font-size: 12px;
+  font-weight: 450;
+}
+
+/* ---------------------------------------------------------- handles */
+
+/* 24px hit area, 8px visible cavity dot drawn with ::after */
+.pl-handle.react-flow__handle {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* RF centers left/right handles on the node edge via translate(-50%, -50%);
+   handles live inside position:relative pin rows, so they self-center per row. */
+
+.pl-handle::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--wire-idle);
+  border: 1px solid var(--surface);
+  transition: background 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.pl-handle:hover::after {
+  background: var(--text-secondary);
+}
+
+.pl-handle.is-traced::after {
+  background: var(--pl-pin-hue, var(--signal-1));
+  box-shadow: 0 0 6px 1px
+    color-mix(in srgb, var(--pl-pin-hue, var(--signal-1)) 35%, transparent);
+}
+
+.react-flow__handle.connectionindicator {
+  cursor: crosshair;
+}
+
+/* ------------------------------------------------------------ edges */
+
+.pl-edge {
+  fill: none;
+  stroke: var(--wire-idle);
+  stroke-width: 1.5;
+  transition: stroke 120ms ease-out, stroke-width 120ms ease-out;
+}
+
+.pl-edge.is-traced {
+  stroke-width: 2.5;
+}
+
+.pl-edge.is-selected {
+  stroke: var(--border-active);
+  stroke-width: 2;
+}
+
+.pl-edge-glow {
+  fill: none;
+  stroke-width: 6;
+  opacity: 0.35;
+  filter: blur(2px);
+  animation: pl-glow-in 120ms ease-out;
+}
+
+@keyframes pl-glow-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+.pl-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.react-flow__connection-path {
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+/* -------------------------------------------------------- inspector */
+
+.pl-inspector {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px 12px;
+  z-index: 10;
+}
+
+.pl-inspector__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pl-inspector__title {
+  font-weight: 600;
+}
+
+.pl-inspector__type {
+  font: 500 10px var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  flex: 1;
+}
+
+.pl-inspector__params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 24px;
+}
+
+.pl-param {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+
+.pl-param__label {
+  width: 76px;
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: default;
+}
+
+.pl-param__slider {
+  flex: 1;
+  accent-color: var(--text-secondary);
+  height: 3px;
+}
+
+.pl-param__number {
+  width: 68px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font: 500 12px var(--font-data);
+  font-variant-numeric: tabular-nums;
+  padding: 4px 6px;
+}
+
+.pl-param__value {
+  width: 74px;
+  flex: none;
+  font: 500 12px var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.pl-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font: 500 12px var(--font-ui);
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.pl-toggle.is-on {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* ------------------------------------------------------------ toast */
+
+.pl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 10px 16px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ----------------------------------------------- react-flow chrome */
+
+.react-flow__attribution {
+  background: transparent;
+}
+
+.react-flow__attribution a {
+  color: var(--text-disabled);
+}
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text-secondary);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--surface);
+  fill: var(--text-primary);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.react-flow__node {
+  cursor: grab;
+}
+
+.react-flow__node.dragging {
+  cursor: grabbing;
+}
+
+/* ----------------------------------------------------------- mobile */
+
+@media (max-width: 767px) {
+  .pl-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .pl-palette {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pl-palette__group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .pl-palette__eyebrow,
+  .pl-palette__hint {
+    display: none;
+  }
+
+  .pl-palette__item {
+    white-space: nowrap;
+    border-color: var(--border);
+  }
+
+  .pl-name {
+    width: 110px;
+  }
+
+  .pl-inspector__params {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .pl-edge,
+  .pl-handle::after,
+  .pl-node,
+  .pl-btn,
+  .pl-name,
+  .pl-palette__item {
+    transition: none;
+  }
+
+  .pl-edge-glow {
+    animation: none;
+  }
+}
