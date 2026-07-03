@@ -158,7 +158,7 @@ Wire colors cycle through the 4 signal hues (see DESIGN.md) by `colorIndex` assi
 **Build 1 — Core editor + audible engine** (this session's prompt)
 Scaffold, canvas, palette, 4 components, wiring rules, trace highlight, compile-on-change, meters, Start Audio gate, localStorage autosave, JSON export/import, GH Pages workflow.
 
-**Build 2 — Full DSP bench** (priority 1)
+**Build 2 — Full DSP bench** (priority 1) ✅ SHIPPED (v0.2.0, + LFO/control pins, Analyzer scope, dynamic Router trace)
 PEQ 4-band (Biquad chain), Compressor (with GR meter), HPF/LPF, Delay, Mixer 4×2, Router 4×4 (gain matrix; `internalRouting` becomes *dynamic* — trace follows actual routing state), Media Player (file drop), **Mic Input** (getUserMedia, echoCancellation/AGC off), pink-noise + sine already done.
 
 **Build 3 — Scenarios engine** (priority 2)

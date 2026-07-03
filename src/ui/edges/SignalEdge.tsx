@@ -3,7 +3,10 @@ import { getSmoothStepPath, type Edge, type EdgeProps } from '@xyflow/react';
 import { useApp } from '../../app/store';
 import { hueFor } from '../constants';
 
-export type SignalEdgeType = Edge<{ colorIndex: number }, 'signal'>;
+export type SignalEdgeType = Edge<
+  { colorIndex: number; kind?: string },
+  'signal'
+>;
 
 function SignalEdgeImpl({
   id,
@@ -14,6 +17,7 @@ function SignalEdgeImpl({
   sourcePosition,
   targetPosition,
   selected,
+  data,
 }: EdgeProps<SignalEdgeType>) {
   const traced = useApp((s) => s.ui.trace?.wires.has(id) ?? false);
   const hueIndex = useApp((s) => s.ui.trace?.hueIndex ?? 1);
@@ -31,7 +35,8 @@ function SignalEdgeImpl({
     borderRadius: 10,
   });
 
-  const hue = hueFor(hueIndex);
+  const isControl = data?.kind === 'control';
+  const hue = isControl ? 'var(--control)' : hueFor(hueIndex);
 
   return (
     <g className="pl-edge-group">
@@ -44,6 +49,7 @@ function SignalEdgeImpl({
           'pl-edge',
           traced ? 'is-traced' : '',
           selected ? 'is-selected' : '',
+          isControl ? 'is-control' : '',
         ].join(' ')}
         style={traced ? { stroke: hue } : undefined}
       />

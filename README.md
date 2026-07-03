@@ -2,7 +2,17 @@
 
 A browser-based audio signal-flow designer for practicing Q-SYS-style system design — with a real Web Audio engine behind every wire. Hover any pin and the full signal path lights up; everything else stays quiet.
 
-**Build 1** ships: schematic canvas, 4 components (Sine Generator, Pink Noise, Gain, Master Output with safety limiter), Q-SYS-accurate wiring rules (one wire per input, no feedback loops), pin-level trace highlighting, live smoothed parameters, per-node meters (RMS + peak-hold + clip latch), autosave, JSON export/import.
+**Build 2** ships a full DSP bench — 16 components:
+
+- **Sources**: Signal Generator (sine/square/saw/tri), Noise (pink/white), **Media Player** (load your own audio files), **Mic Input**
+- **Modulation**: LFO with **control pins** — dashed control wires drive Mod inputs on Gain, Filter, Delay, and Panner (tremolo, filter sweeps, chorus/vibrato, auto-pan)
+- **DSP**: Gain, Filter (LP/HP/BP/notch), 4-band Parametric EQ, Compressor, Delay w/ feedback, Reverb (synthesized IR), Distortion, Panner
+- **Routing**: Mixer 4×1 (sum multiple chains), Router 4×4 with **dynamic trace** — the highlight follows the actual crosspoint state
+- **Metering**: Analyzer node with a live waveform/spectrum scope drawn in the node
+
+Plus everything from Build 1: Q-SYS-accurate wiring rules (one wire per input, kind-matched pins, no feedback loops), pin-level trace highlighting, live smoothed parameters, per-node meters (RMS + peak-hold + clip latch), autosave, JSON export/import, undo.
+
+> Media files are decoded in-memory and are **not** persisted — reload the file after a page refresh. Old Build 1 designs load automatically (`sine_gen` is aliased to `signal_gen`).
 
 Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (system design + 5-build roadmap) · [`docs/DESIGN.md`](docs/DESIGN.md) (token system).
 

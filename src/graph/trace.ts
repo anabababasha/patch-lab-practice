@@ -1,6 +1,6 @@
 import type { Design, PinRef, Wire } from '../lib/types';
 import { pinKey } from '../lib/types';
-import { registry } from '../components/registry';
+import { registry, resolveRouting } from '../components/registry';
 
 export interface TraceResult {
   nodes: Set<string>;
@@ -35,12 +35,16 @@ export function computeTrace(design: Design, start: PinRef): TraceResult {
   const dirOf = (r: PinRef): 'in' | 'out' | undefined =>
     specOf(r.nodeId)?.pins.find((p) => p.id === r.pinId)?.direction;
 
-  // reverse internal routing per type: outPinId -> inPinIds
-  const reverseRouting = (nodeId: string): Record<string, string[]> => {
+  const routingOf = (nodeId: string): Record<string, string[]> => {
+    const n = nodeById.get(nodeId);
     const spec = specOf(nodeId);
+    return n && spec ? resolveRouting(spec, n.params) : {};
+  };
+
+  // reverse internal routing per node: outPinId -> inPinIds
+  const reverseRouting = (nodeId: string): Record<string, string[]> => {
     const rev: Record<string, string[]> = {};
-    if (!spec) return rev;
-    for (const [inId, outs] of Object.entries(spec.internalRouting)) {
+    for (const [inId, outs] of Object.entries(routingOf(nodeId))) {
       for (const outId of outs) (rev[outId] ??= []).push(inId);
     }
     return rev;
@@ -89,7 +93,7 @@ export function computeTrace(design: Design, start: PinRef): TraceResult {
             stack.push(w.to);
           }
         } else {
-          const outs = specOf(p.nodeId)?.internalRouting[p.pinId] ?? [];
+          const outs = routingOf(p.nodeId)[p.pinId] ?? [];
           for (const outId of outs) stack.push({ nodeId: p.nodeId, pinId: outId });
         }
       } else {

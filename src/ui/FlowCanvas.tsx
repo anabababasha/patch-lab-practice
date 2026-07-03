@@ -82,7 +82,7 @@ export function FlowCanvas() {
         sourceHandle: w.from.pinId,
         target: w.to.nodeId,
         targetHandle: w.to.pinId,
-        data: { colorIndex: w.colorIndex },
+        data: { colorIndex: w.colorIndex, kind: w.kind ?? 'audio' },
         selected: w.id === selectedWireId,
       })),
     [design.wires, selectedWireId],

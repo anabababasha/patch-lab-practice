@@ -11,13 +11,15 @@ export interface PinSpec {
 export interface ParamSpec {
   id: string;
   label: string;
-  unit: 'dB' | 'Hz' | 'ms' | '%' | '';
+  unit: 'dB' | 'Hz' | 'ms' | '%' | 's' | '';
   min: number;
   max: number;
   step: number;
   default: number;
   taper?: 'lin' | 'log';
-  kind?: 'slider' | 'toggle';
+  kind?: 'slider' | 'toggle' | 'select';
+  /** for kind 'select': value is the option index */
+  options?: string[];
 }
 
 /** Contract every audio component factory fulfils. */
@@ -30,18 +32,27 @@ export interface AudioUnit {
   bind(paramId: string, value: number): void;
   /** inline analysers (audio passes through them) for metering */
   analysers: Record<string, AnalyserNode>;
+  /** optional high-resolution analyser for the Analyzer scope display */
+  scope?: AnalyserNode;
   dispose(): void;
 }
+
+export type InternalRouting =
+  | Record<string, string[]>
+  | ((params: Record<string, number>) => Record<string, string[]>);
 
 export interface ComponentSpec {
   type: string;
   name: string;
-  category: 'source' | 'dsp' | 'output';
+  category: 'source' | 'mod' | 'dsp' | 'routing' | 'meter' | 'output';
   pins: PinSpec[];
   params: ParamSpec[];
-  /** inPinId -> outPinIds it feeds (used by the trace algorithm) */
-  internalRouting: Record<string, string[]>;
-  createAudio(ctx: AudioContext): AudioUnit;
+  /** inPinId -> outPinIds it feeds (used by the trace algorithm);
+   *  function form = routing depends on params (e.g. Router) */
+  internalRouting: InternalRouting;
+  /** special node body renderers */
+  display?: 'scope' | 'media' | 'mic';
+  createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 
 export interface NodeInstance {
@@ -51,6 +62,8 @@ export interface NodeInstance {
   x: number;
   y: number;
   params: Record<string, number>;
+  /** small string metadata (e.g. loaded file name) — optional, additive */
+  meta?: Record<string, string>;
 }
 
 export interface PinRef {
@@ -63,6 +76,7 @@ export interface Wire {
   from: PinRef; // always an OUT pin
   to: PinRef; // always an IN pin
   colorIndex: number; // 1..4 -> signal hue
+  kind?: SignalKind; // 'audio' (default) | 'control' -> dashed rendering
 }
 
 export interface Design {

@@ -20,6 +20,27 @@ function ParamControl({
 }) {
   const setParam = useApp((s) => s.setParam);
 
+  if (spec.kind === 'select' && spec.options) {
+    const idx = Math.round(value);
+    return (
+      <div className="pl-param">
+        <span className="pl-param__label">{spec.label}</span>
+        <div className="pl-segment" role="radiogroup" aria-label={spec.label}>
+          {spec.options.map((opt, i) => (
+            <button
+              key={opt}
+              className={i === idx ? 'is-on' : ''}
+              aria-pressed={i === idx}
+              onClick={() => setParam(nodeId, spec.id, i)}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (spec.kind === 'toggle') {
     const on = value > 0.5;
     return (

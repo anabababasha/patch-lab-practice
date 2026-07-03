@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { Design, NodeInstance, PinRef, Wire } from '../lib/types';
-import { registry } from '../components/registry';
+import { registry, typeAliases } from '../components/registry';
 import { computeTrace, computeTraceFromWire } from '../graph/trace';
 import type { TraceResult } from '../graph/trace';
 import { engine } from '../audio/engine';
+import { micManager } from '../audio/mediaCache';
 
 const STORAGE_KEY = 'patchlab.design.v1';
 const HISTORY_MAX = 50;
@@ -42,9 +43,10 @@ export function sanitizeDesign(raw: unknown): Design | null {
   const nodes: NodeInstance[] = [];
   for (const n of d.nodes) {
     if (!n || typeof n !== 'object') continue;
-    const spec = registry[(n as NodeInstance).type];
-    if (!spec) continue; // unknown component type -> drop
     const src = n as NodeInstance;
+    const resolvedType = typeAliases[src.type] ?? src.type;
+    const spec = registry[resolvedType];
+    if (!spec) continue; // unknown component type -> drop
     const params: Record<string, number> = {};
     for (const p of spec.params) {
       const v = src.params?.[p.id];
@@ -53,6 +55,15 @@ export function sanitizeDesign(raw: unknown): Design | null {
           ? Math.min(p.max, Math.max(p.min, v))
           : p.default;
     }
+    let meta: Record<string, string> | undefined;
+    if (src.meta && typeof src.meta === 'object') {
+      meta = {};
+      for (const [k, val] of Object.entries(src.meta)) {
+        if (typeof val === 'string' && k.length <= 40 && val.length <= 200)
+          meta[k] = val;
+      }
+      if (Object.keys(meta).length === 0) meta = undefined;
+    }
     nodes.push({
       id: typeof src.id === 'string' ? src.id : uid('n'),
       type: spec.type,
@@ -60,14 +71,15 @@ export function sanitizeDesign(raw: unknown): Design | null {
       x: typeof src.x === 'number' ? src.x : 0,
       y: typeof src.y === 'number' ? src.y : 0,
       params,
+      ...(meta ? { meta } : {}),
     });
   }
 
   const nodeIds = new Set(nodes.map((n) => n.id));
-  const pinOk = (r: PinRef, dir: 'in' | 'out') => {
-    if (!r || !nodeIds.has(r.nodeId)) return false;
+  const pinSpec = (r: PinRef, dir: 'in' | 'out') => {
+    if (!r || !nodeIds.has(r.nodeId)) return undefined;
     const node = nodes.find((n) => n.id === r.nodeId)!;
-    return registry[node.type].pins.some(
+    return registry[node.type].pins.find(
       (p) => p.id === r.pinId && p.direction === dir,
     );
   };
@@ -77,7 +89,9 @@ export function sanitizeDesign(raw: unknown): Design | null {
   for (const w of d.wires) {
     if (!w || typeof w !== 'object') continue;
     const src = w as Wire;
-    if (!pinOk(src.from, 'out') || !pinOk(src.to, 'in')) continue;
+    const fromPin = pinSpec(src.from, 'out');
+    const toPin = pinSpec(src.to, 'in');
+    if (!fromPin || !toPin || fromPin.kind !== toPin.kind) continue;
     const inKey = `${src.to.nodeId}:${src.to.pinId}`;
     if (takenInputs.has(inKey)) continue;
     takenInputs.add(inKey);
@@ -91,6 +105,7 @@ export function sanitizeDesign(raw: unknown): Design | null {
         src.colorIndex <= 4
           ? src.colorIndex
           : (wires.length % 4) + 1,
+      kind: fromPin.kind,
     });
   }
 
@@ -113,10 +128,15 @@ function loadSaved(): Design | null {
 
 /* ------------------------------------------------------------- store */
 
+type TraceSource =
+  | { kind: 'pin'; pin: PinRef }
+  | { kind: 'wire'; wireId: string };
+
 interface UiState {
   selectedNodeId: string | null;
   selectedWireId: string | null;
   trace: TraceResult | null;
+  traceSource: TraceSource | null;
   tracePinned: boolean;
   toast: { id: number; msg: string } | null;
 }
@@ -133,6 +153,8 @@ interface AppState {
   removeWire(id: string): void;
   setParam(nodeId: string, paramId: string, value: number): void;
   setName(name: string): void;
+  setNodeMeta(nodeId: string, key: string, value: string): void;
+  loadMediaFile(nodeId: string, file: File): Promise<void>;
 
   selectNode(id: string | null): void;
   selectWire(id: string | null): void;
@@ -169,12 +191,26 @@ export const useApp = create<AppState>((set, get) => {
     engine.requestRebuild(design);
   };
 
+  /** Recompute the active trace against the current design (e.g. after a
+   *  Router crosspoint flips — dynamic routing must move the glow). */
+  const retrace = () => {
+    const s = get();
+    const src = s.ui.traceSource;
+    if (!src || !s.ui.trace) return;
+    const trace =
+      src.kind === 'pin'
+        ? computeTrace(s.design, src.pin)
+        : computeTraceFromWire(s.design, src.wireId);
+    set((st) => ({ ui: { ...st.ui, trace } }));
+  };
+
   return {
     design: loadSaved() ?? emptyDesign(),
     ui: {
       selectedNodeId: null,
       selectedWireId: null,
       trace: null,
+      traceSource: null,
       tracePinned: false,
       toast: null,
     },
@@ -232,6 +268,7 @@ export const useApp = create<AppState>((set, get) => {
           selectedNodeId:
             s.ui.selectedNodeId === id ? null : s.ui.selectedNodeId,
           trace: null,
+          traceSource: null,
           tracePinned: false,
         },
       }));
@@ -241,20 +278,28 @@ export const useApp = create<AppState>((set, get) => {
 
     addWire(a, b) {
       const d = get().design;
-      const dirOf = (r: PinRef) => {
+      const pinOf = (r: PinRef) => {
         const n = d.nodes.find((x) => x.id === r.nodeId);
         return n
-          ? registry[n.type]?.pins.find((p) => p.id === r.pinId)?.direction
+          ? registry[n.type]?.pins.find((p) => p.id === r.pinId)
           : undefined;
       };
       let from = a;
       let to = b;
-      if (dirOf(a) === 'in' && dirOf(b) === 'out') {
+      if (pinOf(a)?.direction === 'in' && pinOf(b)?.direction === 'out') {
         from = b;
         to = a;
       }
-      if (dirOf(from) !== 'out' || dirOf(to) !== 'in') return;
+      const fromPin = pinOf(from);
+      const toPin = pinOf(to);
+      if (fromPin?.direction !== 'out' || toPin?.direction !== 'in') return;
 
+      if (fromPin.kind !== toPin.kind) {
+        get().showToast(
+          'Signal kinds must match — control outs (dashed) go to Mod inputs.',
+        );
+        return;
+      }
       if (from.nodeId === to.nodeId) {
         get().showToast('A component cannot feed itself.');
         return;
@@ -294,8 +339,10 @@ export const useApp = create<AppState>((set, get) => {
         from,
         to,
         colorIndex: (d.wires.length % 4) + 1,
+        kind: fromPin.kind,
       };
       commitStructural({ ...d, wires: [...d.wires, wire] });
+      retrace();
     },
 
     removeWire(id) {
@@ -309,6 +356,7 @@ export const useApp = create<AppState>((set, get) => {
           selectedWireId:
             s.ui.selectedWireId === id ? null : s.ui.selectedWireId,
           trace: null,
+          traceSource: null,
           tracePinned: false,
         },
       }));
@@ -336,6 +384,29 @@ export const useApp = create<AppState>((set, get) => {
       set({ design });
       saveSoon(design);
       engine.setParam(nodeId, paramId, value); // live, no rebuild
+      retrace(); // dynamic routing (Router) can change the traced path
+    },
+
+    setNodeMeta(nodeId, key, value) {
+      const d = get().design;
+      const design = {
+        ...d,
+        nodes: d.nodes.map((n) =>
+          n.id === nodeId ? { ...n, meta: { ...n.meta, [key]: value } } : n,
+        ),
+      };
+      set({ design });
+      saveSoon(design);
+    },
+
+    async loadMediaFile(nodeId, file) {
+      try {
+        const name = await engine.loadMedia(nodeId, file);
+        get().setNodeMeta(nodeId, 'file', name);
+        get().showToast(`Loaded "${name}"`);
+      } catch {
+        get().showToast('Could not decode that audio file.');
+      }
     },
 
     setName(name) {
@@ -364,6 +435,7 @@ export const useApp = create<AppState>((set, get) => {
         ui: {
           ...s.ui,
           trace: pin ? computeTrace(s.design, pin) : null,
+          traceSource: pin ? { kind: 'pin', pin } : null,
         },
       });
     },
@@ -374,22 +446,38 @@ export const useApp = create<AppState>((set, get) => {
         ui: {
           ...s.ui,
           trace: wireId ? computeTraceFromWire(s.design, wireId) : null,
+          traceSource: wireId ? { kind: 'wire', wireId } : null,
         },
       });
     },
     pinTracePin(pin) {
       const s = get();
       set({
-        ui: { ...s.ui, trace: computeTrace(s.design, pin), tracePinned: true },
+        ui: {
+          ...s.ui,
+          trace: computeTrace(s.design, pin),
+          traceSource: { kind: 'pin', pin },
+          tracePinned: true,
+        },
       });
     },
     pinTraceWire(wireId) {
       const s = get();
       const trace = computeTraceFromWire(s.design, wireId);
-      if (trace) set({ ui: { ...s.ui, trace, tracePinned: true } });
+      if (trace)
+        set({
+          ui: {
+            ...s.ui,
+            trace,
+            traceSource: { kind: 'wire', wireId },
+            tracePinned: true,
+          },
+        });
     },
     clearTrace() {
-      set((s) => ({ ui: { ...s.ui, trace: null, tracePinned: false } }));
+      set((s) => ({
+        ui: { ...s.ui, trace: null, traceSource: null, tracePinned: false },
+      }));
     },
     clearSelection() {
       set((s) => ({
@@ -398,6 +486,7 @@ export const useApp = create<AppState>((set, get) => {
           selectedNodeId: null,
           selectedWireId: null,
           trace: null,
+          traceSource: null,
           tracePinned: false,
         },
       }));
@@ -415,7 +504,7 @@ export const useApp = create<AppState>((set, get) => {
       const design = prev;
       set((s) => ({
         design,
-        ui: { ...s.ui, trace: null, tracePinned: false },
+        ui: { ...s.ui, trace: null, traceSource: null, tracePinned: false },
       }));
       saveSoon(design);
       engine.requestRebuild(design);
@@ -455,6 +544,7 @@ export const useApp = create<AppState>((set, get) => {
           selectedNodeId: null,
           selectedWireId: null,
           trace: null,
+          traceSource: null,
           tracePinned: false,
         },
       }));
@@ -470,6 +560,7 @@ export const useApp = create<AppState>((set, get) => {
           selectedNodeId: null,
           selectedWireId: null,
           trace: null,
+          traceSource: null,
           tracePinned: false,
         },
       }));
@@ -483,3 +574,4 @@ export const useApp = create<AppState>((set, get) => {
 
 // keep the Start Audio pill honest if the OS suspends the context
 engine.onStateChange = (running) => useApp.getState().setAudioRunning(running);
+micManager.onDenied = (msg) => useApp.getState().showToast(msg);

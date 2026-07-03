@@ -18,6 +18,7 @@
   --signal-2: #ff8a1e;
   --signal-3: #ffc933;
   --signal-4: #3b9cff;
+  --control: #b8c0cc;
   --danger: #ff4d4d;
   --meter-rms: #2ecc71;
   --meter-peak: #ffc933;
@@ -209,6 +210,11 @@ body {
   flex: none;
 }
 
+.pl-dot.cat-mod {
+  border-radius: 1.5px;
+  transform: rotate(45deg);
+}
+
 .pl-palette__hint {
   margin-top: auto;
   padding: 8px 6px 2px;
@@ -383,6 +389,108 @@ body {
   stroke-width: 14;
   pointer-events: stroke;
   cursor: pointer;
+}
+
+.pl-edge.is-control {
+  stroke-dasharray: 5 4;
+}
+
+/* control pins render as small squares in the reserved control tone */
+.pl-handle.is-control::after {
+  border-radius: 2px;
+  transform: rotate(45deg);
+  inset: 8px;
+}
+
+.pl-handle.is-control:hover::after {
+  background: var(--control);
+}
+
+.pl-handle.is-control.is-traced::after {
+  background: var(--control);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--control) 40%, transparent);
+}
+
+/* ------------------------------------------------------- node extras */
+
+.pl-scope {
+  display: block;
+  width: 184px;
+  height: 72px;
+  margin: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+
+.pl-node__extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.pl-mini-btn {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font: 500 11px var(--font-ui);
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pl-mini-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.pl-node__file {
+  font: 450 11px var(--font-data);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pl-node__hint {
+  font-size: 10.5px;
+  color: var(--text-disabled);
+}
+
+/* ---------------------------------------------------- segmented select */
+
+.pl-segment {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+  flex-wrap: wrap;
+}
+
+.pl-segment button {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font: 500 11px var(--font-ui);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.pl-segment button:hover {
+  color: var(--text-primary);
+}
+
+.pl-segment button.is-on {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .react-flow__connection-path {

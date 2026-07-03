@@ -1,18 +1,19 @@
 import type { AudioUnit, Design } from '../lib/types';
 import { registry } from '../components/registry';
 import { meterService } from './meterService';
+import { scopeService } from './scopeService';
+import { mediaCache } from './mediaCache';
 
 /**
- * Compile strategy (Build 1): correctness over cleverness.
+ * Compile strategy: correctness over cleverness.
  *  - structural change  -> debounced 50 ms full teardown + rebuild
  *  - param change       -> bind() only (setTargetAtTime, zero rebuilds)
- * The graph is small; a full rebuild is inaudibly cheap.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private units = new Map<string, AudioUnit>();
   private timer: number | undefined;
-  private pending: Design | null = null;
+  private lastDesign: Design | null = null;
   onStateChange: ((running: boolean) => void) | null = null;
 
   get context() {
@@ -32,6 +33,7 @@ class AudioEngine {
   /** User-gesture gate: builds the current design, then resumes. */
   async start(design: Design): Promise<boolean> {
     const ctx = this.ensure();
+    this.lastDesign = design;
     this.rebuild(design);
     await ctx.resume();
     return ctx.state === 'running';
@@ -43,11 +45,11 @@ class AudioEngine {
 
   /** Call on any node/wire add/remove (or full design swap). */
   requestRebuild(design: Design) {
-    this.pending = design;
+    this.lastDesign = design;
     if (!this.ctx) return; // nothing audible yet; start() will build fresh
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => {
-      if (this.pending) this.rebuild(this.pending);
+      if (this.lastDesign) this.rebuild(this.lastDesign);
     }, 50);
   }
 
@@ -58,16 +60,18 @@ class AudioEngine {
     for (const u of this.units.values()) u.dispose();
     this.units.clear();
 
-    const analysers = new Map<string, AnalyserNode>();
+    const meters = new Map<string, AnalyserNode>();
+    const scopes = new Map<string, AnalyserNode>();
 
     for (const n of design.nodes) {
       const spec = registry[n.type];
       if (!spec) continue;
-      const unit = spec.createAudio(ctx);
+      const unit = spec.createAudio(ctx, n.id);
       for (const p of spec.params) unit.bind(p.id, n.params[p.id] ?? p.default);
       this.units.set(n.id, unit);
       const first = Object.values(unit.analysers)[0];
-      if (first) analysers.set(n.id, first);
+      if (first) meters.set(n.id, first);
+      if (unit.scope) scopes.set(n.id, unit.scope);
     }
 
     for (const w of design.wires) {
@@ -76,12 +80,22 @@ class AudioEngine {
       if (out && inp) out.connect(inp);
     }
 
-    meterService.setAnalysers(analysers);
+    meterService.setAnalysers(meters);
+    scopeService.setAnalysers(scopes);
   }
 
   /** Live, smoothed, no rebuild. */
   setParam(nodeId: string, paramId: string, value: number) {
     this.units.get(nodeId)?.bind(paramId, value);
+  }
+
+  /** Decode an audio file for a Media Player node and rebuild so it plays. */
+  async loadMedia(nodeId: string, file: File): Promise<string> {
+    const ctx = this.ensure(); // decoding works while suspended
+    const buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    mediaCache.set(nodeId, { buffer, name: file.name });
+    if (this.lastDesign) this.requestRebuild(this.lastDesign);
+    return file.name;
   }
 }
 
