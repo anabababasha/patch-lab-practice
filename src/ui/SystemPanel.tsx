@@ -5,6 +5,8 @@ import { validateDesign } from '../graph/validate';
 import type { Issue } from '../graph/validate';
 import type { ComponentSpec } from '../lib/types';
 import { useReactFlow } from '@xyflow/react';
+import { MiniFlow } from './MiniFlow';
+import { examples } from '../examples';
 
 function InfoTab({ spec }: { spec?: ComponentSpec }) {
   if (spec && spec.help) {
@@ -34,12 +36,35 @@ function InfoTab({ spec }: { spec?: ComponentSpec }) {
             ))}
           </ul>
         </div>
+        {spec.help.flows && spec.help.flows.length > 0 && (
+          <div className="pl-info-flows">
+            <h4>Typical patches</h4>
+            <MiniFlow flows={spec.help.flows} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="pl-system-tab pl-info-tab pl-info-static">
+      <div className="pl-examples-list">
+        <h4>Examples</h4>
+        {examples.map((ex) => (
+          <div key={ex.id} className="pl-example-row">
+            <div className="pl-example-text">
+              <strong>{ex.name}</strong>
+              <div className="pl-example-blurb">{ex.blurb}</div>
+            </div>
+            <button 
+              className="pl-mini-btn"
+              onClick={() => useApp.getState().loadExample(ex.build())}
+            >
+              Load
+            </button>
+          </div>
+        ))}
+      </div>
       <h3>PatchLab Guide</h3>
       <p>
         Welcome to PatchLab, a tool for practicing system design. 
@@ -84,8 +109,9 @@ function IssueList({ title, issues }: { title: string; issues: Issue[] }) {
 function CheckTab() {
   const design = useApp((s) => s.design);
   const rejections = useApp((s) => s.ui.rejections);
+  const audioRunning = useApp((s) => s.audioRunning);
   
-  const issues = useMemo(() => validateDesign(design), [design]);
+  const issues = useMemo(() => validateDesign(design, audioRunning), [design, audioRunning]);
   
   const errors = issues.filter(i => i.severity === 'error');
   const warns = issues.filter(i => i.severity === 'warn');
@@ -117,6 +143,7 @@ export function SystemPanel() {
   const setOpen = useApp((s) => s.setPanelOpen);
   const design = useApp((s) => s.design);
   const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
+  const audioRunning = useApp((s) => s.audioRunning);
   const [tab, setTab] = useState<'info' | 'check'>('info');
   const { fitView } = useReactFlow();
 
@@ -125,7 +152,7 @@ export function SystemPanel() {
     setTimeout(() => fitView({ padding: 0.3, duration: 200 }), 50);
   };
 
-  const issues = useMemo(() => validateDesign(design), [design]);
+  const issues = useMemo(() => validateDesign(design, audioRunning), [design, audioRunning]);
   const issueCount = issues.length;
 
   const spec = selectedNodeIds.length === 1 

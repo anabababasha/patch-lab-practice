@@ -1,4 +1,4 @@
-export type SignalKind = 'audio' | 'control' | 'network';
+export type SignalKind = 'audio' | 'control' | 'network' | 'trigger';
 export type PinDirection = 'in' | 'out';
 
 export interface PinSpec {
@@ -34,6 +34,8 @@ export interface AudioUnit {
   analysers: Record<string, AnalyserNode>;
   /** optional high-resolution analyser for the Analyzer scope display */
   scope?: AnalyserNode;
+  /** optional event triggers, e.g. envelope fire */
+  triggerIns?: Record<string, () => void>;
   dispose(): void;
 }
 
@@ -53,9 +55,16 @@ export interface ComponentSpec {
   help?: {
     summary: string;
     tips: string[];
+    flows?: Array<{
+      title: string;
+      chain: Array<{
+        label: string;
+        kind?: 'audio' | 'control' | 'trigger';
+      }>;
+    }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic';
+  display?: 'scope' | 'media' | 'mic' | 'trigger';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

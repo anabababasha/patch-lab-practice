@@ -17,6 +17,8 @@ import {
   createReverb,
   createRouter,
   createSignalGen,
+  createTriggerPad,
+  createEnvelope,
 } from '../audio/units';
 
 /* ------------------------------------------------------------ helpers */
@@ -44,6 +46,18 @@ const cOut = (id: string, label: string): PinSpec => ({
   label,
   direction: 'out',
   kind: 'control',
+});
+const tIn = (id: string, label: string): PinSpec => ({
+  id,
+  label,
+  direction: 'in',
+  kind: 'trigger',
+});
+const tOut = (id: string, label: string): PinSpec => ({
+  id,
+  label,
+  direction: 'out',
+  kind: 'trigger',
 });
 
 const db = (
@@ -114,20 +128,74 @@ const select = (
 export const registry: Record<string, ComponentSpec> = {
   /* ------------------------------------------------------- sources */
 
+  trigger_pad: {
+    type: 'trigger_pad',
+    name: 'Trigger Pad',
+    category: 'mod',
+    pins: [tOut('out', 'Trig Out')],
+    params: [],
+    internalRouting: {},
+    display: 'trigger',
+    help: {
+      summary: 'Manual trigger pad — fires every connected Envelope once per tap.',
+      tips: [
+        "Wire Trig Out to an Envelope's Trig input.",
+        "Tap rhythmically to play a beat by hand."
+      ],
+      flows: [
+        { title: 'Fire an envelope', chain: [{label:'Trigger Pad'}, {label:'Envelope', kind:'trigger'}, {label:'any Mod input', kind:'control'}] }
+      ],
+    },
+    createAudio: createTriggerPad,
+  },
+
+  envelope: {
+    type: 'envelope',
+    name: 'Envelope',
+    category: 'mod',
+    pins: [tIn('trig', 'Trig'), cOut('out', 'Env Out')],
+    params: [
+      { id: 'attack', label: 'Attack', unit: 'ms', min: 0.1, max: 500, step: 0.1, default: 1, taper: 'log' },
+      { id: 'decay', label: 'Decay', unit: 'ms', min: 5, max: 4000, step: 1, default: 200, taper: 'log' },
+      select('curve', 'Curve', ['Exp', 'Lin'])
+    ],
+    internalRouting: { trig: ['out'] },
+    help: {
+      summary: 'One-shot attack/decay envelope. Fire it from a Trigger Pad; its dashed Env Out drives any Mod input.',
+      tips: [
+        "Env → Gain Mod (with Gain set low) makes a VCA — the core of a drum sound.",
+        "Env → Signal Generator's Pitch input makes a pitch-drop, like a kick."
+      ],
+      flows: [
+        { title: 'Drum hit (VCA)', chain: [{label:'Trigger Pad'}, {label:'Envelope', kind:'trigger'}, {label:'Gain · Mod', kind:'control'}] },
+        { title: 'Kick pitch drop', chain: [{label:'Trigger Pad'}, {label:'Envelope', kind:'trigger'}, {label:'Signal Gen · Pitch', kind:'control'}] }
+      ],
+    },
+    createAudio: createEnvelope,
+  },
+
   signal_gen: {
     type: 'signal_gen',
     name: 'Signal Generator',
     category: 'source',
-    pins: [aOut('out', 'Output')],
+    pins: [cIn('pitch', 'Pitch'), aOut('out', 'Output')],
     params: [
       select('wave', 'Waveform', ['Sine', 'Square', 'Saw', 'Triangle']),
       hz('freq', 'Frequency', 20, 20000, 440),
       db('level', 'Level', -60, 0, -20),
+      { id: 'pitchAmt', label: 'Pitch Mod', unit: '', min: -4800, max: 4800, step: 10, default: 2400 }
     ],
-    internalRouting: {},
+    internalRouting: { pitch: ['out'] },
     help: {
       summary: 'Test-signal oscillator. In real systems you\'d use a generator like this to verify a signal path before the source arrives.',
-      tips: ['Sine at −20 dB is a safe alignment tone.', 'Square/saw are harmonically rich — good for hearing filters work.'],
+      tips: [
+        'Sine at −20 dB is a safe alignment tone.',
+        'Square/saw are harmonically rich — good for hearing filters work.',
+        'Pitch input + an Envelope = a pitch-drop kick, snare pop, or laser sound.'
+      ],
+      flows: [
+        { title: 'Basic test chain', chain: [{label:'Signal Gen'}, {label:'Gain', kind:'audio'}, {label:'Master Out', kind:'audio'}] }
+      ],
     },
     createAudio: createSignalGen,
   },
@@ -208,6 +276,10 @@ export const registry: Record<string, ComponentSpec> = {
     help: {
       summary: 'Low-frequency oscillator — a control signal, not audio. Wire its dashed Mod Out into a Mod input to animate a parameter.',
       tips: ['LFO → Gain Mod = tremolo.', 'LFO → Filter Mod = auto-wah.', 'LFO → Delay Mod = chorus/vibrato.', 'One LFO can fan out to several Mod inputs.'],
+      flows: [
+        { title: 'Tremolo', chain: [{label:'LFO'}, {label:'Gain · Mod', kind:'control'}] },
+        { title: 'Auto-wah', chain: [{label:'LFO'}, {label:'Filter · Mod', kind:'control'}] }
+      ],
     },
     createAudio: createLFO,
   },
@@ -228,6 +300,9 @@ export const registry: Record<string, ComponentSpec> = {
     help: {
       summary: 'Level control with mute. Its Mod input adds the incoming control signal to the gain — the building block of tremolo and VCA-style envelopes.',
       tips: ['Mod Amt scales how strongly modulation moves the level — 0 % means no effect.', 'Set Gain very low and let an Envelope push it up: that\'s a VCA.'],
+      flows: [
+        { title: 'VCA (envelope volume)', chain: [{label:'Envelope'}, {label:'Gain · Mod', kind:'control'}] }
+      ],
     },
     createAudio: createGain,
   },
@@ -494,6 +569,9 @@ export const registry: Record<string, ComponentSpec> = {
     help: {
       summary: 'Sums up to four sources with per-input level and a master trim — how multiple chains reach one output.',
       tips: ['Inputs sum: four hot signals can overload — trim each.', 'This is the ONLY way to merge signals; inputs accept one wire each.'],
+      flows: [
+        { title: 'Sum two chains', chain: [{label:'Source A / Source B'}, {label:'Mixer', kind:'audio'}, {label:'Master Out', kind:'audio'}] }
+      ],
     },
     createAudio: createMixer,
   },
@@ -578,7 +656,7 @@ export const paletteOrder: Array<{
     label: 'Sources',
     types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in'],
   },
-  { category: 'mod', label: 'Modulation', types: ['lfo'] },
+  { category: 'mod', label: 'Modulation', types: ['lfo', 'envelope', 'trigger_pad'] },
   {
     category: 'dsp',
     label: 'DSP',

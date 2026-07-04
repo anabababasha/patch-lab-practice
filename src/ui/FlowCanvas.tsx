@@ -223,6 +223,11 @@ export function FlowCanvas() {
         bgColor="#0E1116"
       />
       <Controls showInteractive={false} />
+      {design.nodes.length === 0 && (
+        <div className="pl-empty-canvas">
+          Drag components from the left — or load an example from the panel →
+        </div>
+      )}
     </ReactFlow>
   );
 }

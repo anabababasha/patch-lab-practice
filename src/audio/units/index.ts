@@ -22,7 +22,11 @@ export function createSignalGen(ctx: AudioContext): AudioUnit {
   osc.frequency.value = 440;
   const level = ctx.createGain();
   level.gain.value = dbToGain(-20);
+  const pitchScale = ctx.createGain();
+  pitchScale.gain.value = 2400;
   const an = makeAnalyser(ctx);
+  
+  pitchScale.connect(osc.detune);
   osc.connect(level);
   level.connect(an);
   osc.start();
@@ -30,13 +34,14 @@ export function createSignalGen(ctx: AudioContext): AudioUnit {
   const waves: OscillatorType[] = ['sine', 'square', 'sawtooth', 'triangle'];
 
   return {
-    inputs: {},
+    inputs: { pitch: pitchScale },
     outputs: { out: an },
     analysers: { out: an },
     bind(id, v) {
       if (id === 'freq') setNow(osc.frequency, v, ctx);
       if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
       if (id === 'wave') osc.type = waves[clamp(Math.round(v), 0, 3)];
+      if (id === 'pitchAmt') setNow(pitchScale.gain, v, ctx);
     },
     dispose() {
       try {
@@ -45,6 +50,7 @@ export function createSignalGen(ctx: AudioContext): AudioUnit {
         /* noop */
       }
       osc.disconnect();
+      pitchScale.disconnect();
       level.disconnect();
       an.disconnect();
     },
@@ -789,6 +795,65 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
       level.disconnect();
       an.disconnect();
       limiter.disconnect();
+    },
+  };
+}
+
+/* ================================================================ triggers */
+
+export function createTriggerPad(): AudioUnit {
+  return {
+    inputs: {},
+    outputs: {},
+    analysers: {},
+    triggerIns: {}, // it emits, it doesn't receive
+    bind() {},
+    dispose() {},
+  };
+}
+
+export function createEnvelope(ctx: AudioContext): AudioUnit {
+  const src = ctx.createConstantSource();
+  src.offset.value = 1;
+  src.start();
+  const env = ctx.createGain();
+  env.gain.value = 0;
+  src.connect(env);
+  const an = makeAnalyser(ctx);
+  env.connect(an);
+
+  let attackS = 0.001;
+  let decayS = 0.2;
+  let exponential = true;
+
+  const fire = () => {
+    const t = ctx.currentTime;
+    const g = env.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t); // retrigger-safe: start ramp from CURRENT value, not stale target
+    g.linearRampToValueAtTime(1, t + attackS);
+    if (exponential) {
+      g.setTargetAtTime(0, t + attackS, decayS / 3); // setTargetAtTime never reaches exactly 0, /3 approximates a natural decay-to-silence within decayS
+    } else {
+      g.linearRampToValueAtTime(0, t + attackS + decayS);
+    }
+  };
+
+  return {
+    inputs: {},
+    outputs: { out: an },
+    analysers: { out: an },
+    triggerIns: { trig: fire },
+    bind(id, v) {
+      if (id === 'attack') attackS = v / 1000;
+      if (id === 'decay') decayS = v / 1000;
+      if (id === 'curve') exponential = Math.round(v) === 0;
+    },
+    dispose() {
+      try { src.stop(); } catch {}
+      src.disconnect();
+      env.disconnect();
+      an.disconnect();
     },
   };
 }

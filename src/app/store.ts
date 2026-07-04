@@ -160,6 +160,7 @@ interface AppState {
   setName(name: string): void;
   setNodeMeta(nodeId: string, key: string, value: string): void;
   loadMediaFile(nodeId: string, file: File): Promise<void>;
+  fireTrigger(nodeId: string, pinId: string): void;
 
   setSelectedNodes(ids: string[]): void;
   addToSelection(id: string): void;
@@ -182,12 +183,14 @@ interface AppState {
   exportJson(): string;
   importJson(json: string): boolean;
   newDesign(): void;
+  loadExample(design: Design): void;
   setAudioRunning(v: boolean): void;
 }
 
 let history: Design[] = [];
 let redoStack: Design[] = [];
 let lastParamStamp = { key: '', time: 0 };
+let shownAutoStartToast = false;
 
 const updateHistoryState = () => {
   useApp.setState({
@@ -302,6 +305,18 @@ export const useApp = create<AppState>((set, get) => {
       get().removeNodes([id]);
     },
 
+    async fireTrigger(nodeId, pinId) {
+      if (!get().audioRunning) {
+        await engine.start(get().design);
+        get().setAudioRunning(true);
+        if (!shownAutoStartToast) {
+          shownAutoStartToast = true;
+          get().showToast('Audio started — tap TRIG again to hear it');
+        }
+      }
+      engine.emitTrigger(nodeId, pinId);
+    },
+
     /* -------------------------------------------------------- wires */
 
     addWire(a, b) {
@@ -333,7 +348,7 @@ export const useApp = create<AppState>((set, get) => {
       };
 
       if (fromPin.kind !== toPin.kind) {
-        reject('Signal kinds must match — control outs (dashed) go to Mod inputs.');
+        reject('Signal kinds must match — audio to audio, dashed control to Mod, dotted trigger to Trig.');
         return;
       }
       if (from.nodeId === to.nodeId) {
@@ -632,6 +647,27 @@ export const useApp = create<AppState>((set, get) => {
           tracePinned: false,
         },
       }));
+    },
+
+    loadExample(design) {
+      const sanitized = sanitizeDesign(design);
+      if (!sanitized) return;
+      snapshot(get().design);
+      commitStructural(sanitized);
+      set((s) => ({
+        ui: {
+          ...s.ui,
+          selectedNodeIds: [],
+          selectedWireId: null,
+          trace: null,
+          traceSource: null,
+          tracePinned: false,
+        },
+      }));
+      const msg = sanitized.nodes.some(n => n.type === 'trigger_pad')
+        ? 'Loaded — tap TRIG'
+        : 'Loaded — press Start Audio';
+      get().showToast(msg);
     },
 
     setAudioRunning(v) {

@@ -12,6 +12,7 @@ import { mediaCache } from './mediaCache';
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private units = new Map<string, AudioUnit>();
+  private triggerMap = new Map<string, Array<() => void>>();
   private timer: number | undefined;
   private lastDesign: Design | null = null;
   onStateChange: ((running: boolean) => void) | null = null;
@@ -80,10 +81,22 @@ class AudioEngine {
       if (unit.scope) scopes.set(n.id, unit.scope);
     }
 
+    this.triggerMap.clear();
+
     for (const w of design.wires) {
-      const out = this.units.get(w.from.nodeId)?.outputs[w.from.pinId];
-      const inp = this.units.get(w.to.nodeId)?.inputs[w.to.pinId];
-      if (out && inp) out.connect(inp);
+      if (w.kind === 'trigger') {
+        const handler = this.units.get(w.to.nodeId)?.triggerIns?.[w.to.pinId];
+        if (handler) {
+          const key = `${w.from.nodeId}:${w.from.pinId}`;
+          const arr = this.triggerMap.get(key) || [];
+          arr.push(handler);
+          this.triggerMap.set(key, arr);
+        }
+      } else {
+        const out = this.units.get(w.from.nodeId)?.outputs[w.from.pinId];
+        const inp = this.units.get(w.to.nodeId)?.inputs[w.to.pinId];
+        if (out && inp) out.connect(inp);
+      }
     }
 
     meterService.setAnalysers(meters);
@@ -93,6 +106,13 @@ class AudioEngine {
   /** Live, smoothed, no rebuild. */
   setParam(nodeId: string, paramId: string, value: number) {
     this.units.get(nodeId)?.bind(paramId, value);
+  }
+
+  emitTrigger(nodeId: string, pinId: string) {
+    const handlers = this.triggerMap.get(`${nodeId}:${pinId}`);
+    if (handlers) {
+      for (const h of handlers) h();
+    }
   }
 
   /** Decode an audio file for a Media Player node and rebuild so it plays. */

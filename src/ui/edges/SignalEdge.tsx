@@ -36,6 +36,7 @@ function SignalEdgeImpl({
   });
 
   const isControl = data?.kind === 'control';
+  const isTrigger = data?.kind === 'trigger';
   const hue = isControl ? 'var(--control)' : hueFor(hueIndex);
 
   return (
@@ -50,6 +51,7 @@ function SignalEdgeImpl({
           traced ? 'is-traced' : '',
           selected ? 'is-selected' : '',
           isControl ? 'is-control' : '',
+          isTrigger ? 'is-trigger' : '',
         ].join(' ')}
         style={traced ? { stroke: hue } : undefined}
       />

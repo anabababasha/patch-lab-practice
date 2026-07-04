@@ -345,6 +345,16 @@ body {
     color-mix(in srgb, var(--pl-pin-hue, var(--signal-1)) 35%, transparent);
 }
 
+.pl-handle.is-dim::after {
+  opacity: 0.35;
+}
+
+.pl-handle.is-valid-target::after {
+  background: var(--text-primary);
+  box-shadow: 0 0 0 2px var(--border-active);
+  transform: scale(1.3);
+}
+
 .react-flow__handle.connectionindicator {
   cursor: crosshair;
 }
@@ -396,6 +406,10 @@ body {
   stroke-dasharray: 5 4;
 }
 
+.pl-edge.is-trigger {
+  stroke-dasharray: 2 3;
+}
+
 /* control pins render as small squares in the reserved control tone */
 .pl-handle.is-control::after {
   border-radius: 2px;
@@ -412,6 +426,16 @@ body {
   box-shadow: 0 0 6px 1px color-mix(in srgb, var(--control) 40%, transparent);
 }
 
+.pl-handle.is-trigger::after {
+  background: transparent;
+  border: 1.5px solid var(--wire-idle);
+}
+
+.pl-handle.is-trigger.is-traced::after {
+  background: var(--pl-pin-hue, var(--signal-1));
+  border-color: transparent;
+}
+
 /* ------------------------------------------------------- node extras */
 
 .pl-scope {
@@ -422,6 +446,22 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--canvas);
+}
+
+.pl-pad {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font: 700 13px var(--font-ui);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.pl-pad.is-pressed {
+  background: var(--signal-1);
+  color: #06120b;
+  border-color: var(--signal-1);
 }
 
 .pl-node__extra {
@@ -814,6 +854,99 @@ body {
 
 .react-flow__node.dragging {
   cursor: grabbing;
+}
+
+/* ----------------------------------------------------------- empty canvas */
+
+.pl-empty-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-disabled);
+  font: 450 14px var(--font-ui);
+  pointer-events: none;
+  text-align: center;
+  z-index: 10;
+}
+
+/* ----------------------------------------------------------- miniflow */
+
+.pl-miniflow-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.pl-miniflow-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pl-miniflow-title {
+  font: 500 12px var(--font-ui);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.pl-miniflow-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.pl-miniflow-node {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font: 450 11px var(--font-ui);
+  color: var(--text-primary);
+}
+
+.pl-miniflow-edge {
+  display: flex;
+  align-items: center;
+  margin: 0 -2px;
+}
+
+/* ----------------------------------------------------------- examples */
+
+.pl-examples-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.pl-example-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  gap: 12px;
+}
+
+.pl-example-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pl-example-text strong {
+  font: 500 13px var(--font-ui);
+  color: var(--text-primary);
+}
+
+.pl-example-blurb {
+  font: 400 12px var(--font-ui);
+  color: var(--text-secondary);
 }
 
 /* ----------------------------------------------------------- mobile */

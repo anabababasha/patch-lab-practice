@@ -9,9 +9,17 @@ export interface Issue {
   pin?: PinRef;
 }
 
-export function validateDesign(design: Design): Issue[] {
+export function validateDesign(design: Design, audioRunning = true): Issue[] {
   const issues: Issue[] = [];
   const { nodes, wires } = design;
+
+  if (!audioRunning && wires.length > 0) {
+    issues.push({
+      id: 'audio-not-running',
+      severity: 'info',
+      message: 'Audio is not running — press Start Audio (or tap a Trigger Pad) to hear your design.',
+    });
+  }
 
   const hasMaster = nodes.some((n) => n.type === 'master_out');
   if (!hasMaster) {
@@ -132,6 +140,35 @@ export function validateDesign(design: Design): Issue[] {
             });
           }
         }
+      }
+    }
+
+    // Rule 7: Envelope with unconnected trig input
+    if (node.type === 'envelope') {
+      const key = `${node.id}:trig`;
+      if (!inWires.has(key) || inWires.get(key)!.length === 0) {
+        issues.push({
+          id: `env-unconnected-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} will never fire — wire a Trigger Pad (or later, MIDI) to its Trig input.`,
+          nodeId: node.id,
+          pin: { nodeId: node.id, pinId: 'trig' },
+        });
+      }
+    }
+
+    // Rule 8: Node with trigger output but zero wires
+    const triggerOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'trigger');
+    for (const pin of triggerOuts) {
+      const key = `${node.id}:${pin.id}`;
+      if (!outWires.has(key) || outWires.get(key)!.length === 0) {
+        issues.push({
+          id: `trigger-unconnected-${key}`,
+          severity: 'warn',
+          message: `${node.label} is not connected to anything — it won't do anything when tapped.`,
+          nodeId: node.id,
+          pin: { nodeId: node.id, pinId: pin.id },
+        });
       }
     }
   }

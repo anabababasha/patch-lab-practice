@@ -1,5 +1,5 @@
-import { memo, useCallback, useRef, type CSSProperties } from 'react';
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import React, { memo, useCallback, useRef, type CSSProperties } from 'react';
+import { Handle, Position, useConnection, type Node, type NodeProps } from '@xyflow/react';
 import { useApp } from '../../app/store';
 import { registry } from '../../components/registry';
 import { pinKey } from '../../lib/types';
@@ -26,6 +26,23 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     (el: HTMLCanvasElement | null) => scopeService.attachCanvas(id, el),
     [id],
   );
+
+  const conn = useConnection();
+  const wires = useApp((s) => s.design.wires);
+  const designNodes = useApp((s) => s.design.nodes);
+  
+  const fromSpec = React.useMemo(() => {
+    if (!conn.inProgress || !conn.fromHandle) return null;
+    const fromType = designNodes.find(n => n.id === conn.fromHandle!.nodeId)?.type;
+    return fromType ? registry[fromType]?.pins.find(p => p.id === conn.fromHandle!.id) : null;
+  }, [conn.inProgress, conn.fromHandle, designNodes]);
+
+  const takenInputs = React.useMemo(() => {
+    if (!conn.inProgress) return new Set<string>();
+    const set = new Set<string>();
+    for (const w of wires) set.add(`${w.to.nodeId}:${w.to.pinId}`);
+    return set;
+  }, [conn.inProgress, wires]);
 
   if (!node) return null;
   const spec = registry[node.type];
@@ -64,9 +81,21 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         const traced = trace?.pins.has(pinKey({ nodeId: id, pinId: pin.id }));
         const isIn = pin.direction === 'in';
         const isControl = pin.kind === 'control';
+        const isTrigger = pin.kind === 'trigger';
         const idx = isIn
           ? inPins.indexOf(pin) + 1
           : outPins.indexOf(pin) + 1;
+          
+        let hintClass = '';
+        if (conn.inProgress && fromSpec) {
+          const isValidTarget =
+            conn.fromHandle!.nodeId !== id &&
+            fromSpec.direction !== pin.direction &&
+            fromSpec.kind === pin.kind &&
+            (!isIn || !takenInputs.has(`${id}:${pin.id}`));
+          hintClass = isValidTarget ? 'is-valid-target' : 'is-dim';
+        }
+
         return (
           <div
             key={pin.id}
@@ -90,6 +119,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
                 'pl-handle',
                 traced ? 'is-traced' : '',
                 isControl ? 'is-control' : '',
+                isTrigger ? 'is-trigger' : '',
+                hintClass,
               ].join(' ')}
               style={
                 { '--pl-pin-hue': traced ? hue : undefined } as CSSProperties
@@ -148,6 +179,23 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
       {spec.display === 'mic' && (
         <div className="pl-node__extra pl-node__hint">
           Enable asks the browser for mic access
+        </div>
+      )}
+
+      {spec.display === 'trigger' && (
+        <div style={{ padding: '8px' }}>
+          <button
+            className="pl-pad nodrag"
+            style={{ width: '100%', height: '44px' }}
+            onPointerDown={(e) => {
+              const btn = e.currentTarget;
+              btn.classList.add('is-pressed');
+              setTimeout(() => btn.classList.remove('is-pressed'), 120);
+              useApp.getState().fireTrigger(id, 'out');
+            }}
+          >
+            TRIG
+          </button>
         </div>
       )}
     </div>

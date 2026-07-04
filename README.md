@@ -16,6 +16,19 @@ Plus everything from Build 1: Q-SYS-accurate wiring rules (one wire per input, k
 
 Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (system design + 5-build roadmap) · [`docs/DESIGN.md`](docs/DESIGN.md) (token system).
 
+## Performance layer
+
+Build 3 adds trigger signals (dotted wires) for real-time events. Try this kick drum recipe:
+
+1. Signal Generator — Sine, Freq 50 Hz, Level −6 dB
+2. Gain — Gain −60 dB, Mod Amt 100%
+3. Envelope A — Attack 1 ms, Decay 60 ms → wire Env Out to Signal Generator's **Pitch** input, set Signal Generator's `pitchAmt` to 2400
+4. Envelope B — Attack 0.5 ms, Decay 250 ms → wire Env Out to Gain's **Mod** input, Gain's Mod Amt already at 100%
+5. Trigger Pad → wire Trig Out to BOTH Envelope A's and Envelope B's Trig input (fan-out, per the Build 3a fix)
+6. Signal Generator → Gain → Master Output
+
+Tapping the pad should produce a clean, punchy kick drum per tap.
+
 ## Develop
 
 ```bash

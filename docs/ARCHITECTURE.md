@@ -109,6 +109,9 @@ dB↔linear helpers in `lib/units.ts`: `dbToGain(db) = 10^(db/20)`, clamp, forma
 - One global rAF loop (`MeterService`), throttled to 30 fps, reads `getFloatTimeDomainData` into a shared Float32Array, computes RMS + peak-hold per analyser, and **draws directly to a small `<canvas>` in each node header** — no React re-renders on the audio path.
 - Colors: RMS green, peak ticks yellow, ≥ −0.5 dBFS clip = red segment latching 1 s.
 
+### Trigger events (Build 3)
+Trigger wires carry discrete runtime events, not audio or continuous streams. `AudioUnit` exposes an optional `triggerIns` map. On `rebuild()`, the engine resolves all trigger-kind wires into a `triggerMap` keyed by the emitter pin (`from.nodeId:from.pinId`). A global `emitTrigger(nodeId, pinId)` fires all mapped handlers immediately. This bypasses React Flow state for zero-latency, glitch-free triggering (like envelope retriggers).
+
 ---
 
 ## 4. Trace highlighting (the signature interaction)
