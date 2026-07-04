@@ -29,11 +29,14 @@ Build 3 adds trigger signals (dotted wires) for real-time events. Try this kick 
 
 Tapping the pad should produce a clean, punchy kick drum per tap.
 
-## Drum machine
+## Pattern library
 
 Build 4 adds a global transport (BPM + Play/Stop) and a Step Sequencer. The step sequencer uses a sample-accurate lookahead scheduler to emit triggers in perfect time, turning envelopes into a drum machine. 
 
-The sequencer comes loaded with classic Arabic iqa'at pattern presets: Maqsum, Baladi, Saidi, Malfuf, and Sama'i. Odd meters are fully supported — the Sama'i preset configures a 10/8 cycle seamlessly. Load the "Drum Machine (Maqsum)" example from the Examples menu and press Play!
+The sequencer includes a robust rhythm pattern library spanning six traditions: Arabic Iqa\u02bfat, West African 12/8, Latin & Clave, Flamenco Comp\u00e1s, Balkan & Turkish Aksak, and Electronic. Odd meters are fully supported — the Sama'i preset configures a 10/8 cycle seamlessly. Patterns are data, not code — corrections welcome. They can be found and easily edited in `src/patterns/index.ts`. Load the "Drum Machine (Maqsum)" example from the Examples menu, then browse the library in the System Panel to hear other traditions!
+
+### Verifying patterns
+Patterns live in `src/patterns/index.ts` as plain data; each carries `status` and `source`; the path from draft → verified is (1) cross-check against a citable source or authoritative recording, (2) listening review at tradition-appropriate tempo, (3) set `status: 'verified'` and cite the source in the same commit. Corrections are ordinary code commits — the library's git history IS its provenance record.
 
 ## Develop
 

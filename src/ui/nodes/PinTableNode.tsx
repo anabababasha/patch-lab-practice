@@ -7,6 +7,8 @@ import { meterService } from '../../audio/meterService';
 import { scopeService, type ScopeMode } from '../../audio/scopeService';
 import { HEADER_H, ROW_H, hueFor } from '../constants';
 
+import { patterns } from '../../patterns';
+
 export type PinTableNodeType = Node<{ pl: true }, 'pinTable'>;
 
 function applySeqPreset(nodeId: string, name: string) {
@@ -18,30 +20,28 @@ function applySeqPreset(nodeId: string, name: string) {
     }
   }
   
-  if (name === 'Maqsum') {
-    p.steps = 8;
-    [1,0,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
-    [0,1,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
-  } else if (name === 'Baladi') {
-    p.steps = 8;
-    [1,1,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
-    [0,0,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
-  } else if (name === 'Saidi') {
-    p.steps = 8;
-    [1,0,0,1,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
-    [0,1,0,0,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
-  } else if (name === 'Malfuf') {
-    p.steps = 8;
-    [1,0,0,0,0,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
-    [0,0,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
-  } else if (name === "Sama'i") {
-    p.steps = 10;
-    [1,0,0,0,0,1,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
-    [0,0,0,1,0,0,0,1,0,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  if (name === 'Clear') {
+    setBulk(nodeId, p, { pattern: '' });
+  } else {
+    const pattern = patterns.find(pat => pat.name === name || pat.id === name);
+    if (pattern) {
+      p.steps = pattern.steps;
+      p.rate = pattern.rate;
+      for (let r = 0; r < pattern.rows.length; r++) {
+        for (let c = 0; c < pattern.rows[r].length; c++) {
+          p[`s${r + 1}_${c + 1}`] = pattern.rows[r][c];
+        }
+      }
+      setBulk(nodeId, p, { pattern: pattern.id });
+    } else {
+      setBulk(nodeId, p);
+    }
   }
-  // Clear keeps steps unchanged
   
-  setBulk(nodeId, p);
+  // Show toast
+  const showToast = useApp.getState().showToast;
+  const displayName = name === 'Clear' ? 'Clear' : (patterns.find(pat => pat.name === name || pat.id === name)?.name || name);
+  showToast(`${displayName} loaded`);
 }
 
 function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
@@ -127,6 +127,29 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   const inPins = spec.pins.filter((p) => p.direction === 'in');
   const outPins = spec.pins.filter((p) => p.direction === 'out');
+
+  const activePattern = React.useMemo(() => {
+    if (spec.display !== 'sequencer' || !node.meta?.pattern) return null;
+    const pat = patterns.find(p => p.id === node.meta?.pattern);
+    if (!pat) return null;
+    let edited = false;
+    if ((node.params.steps || 16) !== pat.steps) edited = true;
+    if ((node.params.rate || 0) !== pat.rate) edited = true;
+    if (!edited) {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 16; c++) {
+          const expected = (pat.rows[r]?.[c] === 1) ? 1 : 0;
+          const actual = (node.params[`s${r + 1}_${c + 1}`] || 0) > 0.5 ? 1 : 0;
+          if (expected !== actual) {
+            edited = true;
+            break;
+          }
+        }
+        if (edited) break;
+      }
+    }
+    return { pat, edited };
+  }, [spec.display, node.meta?.pattern, node.params]);
 
   return (
     <div
@@ -301,8 +324,26 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
               </div>
             ))}
           </div>
+          {activePattern && (
+            <div style={{ padding: '0 8px 8px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                {activePattern.pat.name}{activePattern.edited ? ' · edited' : ''}
+              </span>
+              {activePattern.edited && (
+                <button 
+                  className="pl-mini-btn nodrag"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    applySeqPreset(id, activePattern.pat.id);
+                  }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          )}
           <div className="pl-seq-presets">
-            {['Maqsum', 'Baladi', 'Saidi', 'Malfuf', "Sama'i", 'Clear'].map(preset => (
+            {['Maqsum', 'Baladi', 'Saidi', 'Malfuf', "Sama\u02bfi Thaqil", 'Clear'].map(preset => (
               <button 
                 key={preset}
                 className="pl-mini-btn nodrag"
@@ -314,6 +355,17 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
                 {preset}
               </button>
             ))}
+            <button 
+              className="pl-mini-btn nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                const s = useApp.getState();
+                s.setPanelOpen(true);
+                s.setPanelTab('patterns');
+              }}
+            >
+              More …
+            </button>
           </div>
         </div>
       )}

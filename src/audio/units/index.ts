@@ -473,8 +473,8 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
 
   const onTick = (time: number, tickIndex: number) => {
     if (tickIndex % rateDiv !== 0) return;
-    const step = pos;
-    pos = (pos + 1) % steps;
+    const step = pos % steps;
+    pos = (step + 1) % steps;
     
     for (let row = 0; row < 4; row++) {
       if (pattern[row][step] === 1) {
@@ -503,7 +503,10 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
     analysers: {},
     triggerIns: {},
     bind(id, v) {
-      if (id === 'steps') steps = Math.max(1, Math.min(16, Math.round(v)));
+      if (id === 'steps') {
+        steps = Math.max(1, Math.min(16, Math.round(v)));
+        pos = pos % steps;
+      }
       else if (id === 'rate') rateDiv = Math.round(v) === 0 ? 2 : 1;
       else if (id.startsWith('s')) {
         const m = id.match(/s(\d)_(\d+)/);

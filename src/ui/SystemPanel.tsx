@@ -7,6 +7,7 @@ import type { ComponentSpec } from '../lib/types';
 import { useReactFlow } from '@xyflow/react';
 import { MiniFlow } from './MiniFlow';
 import { examples } from '../examples';
+import { PatternBrowser } from './PatternBrowser';
 
 function InfoTab({ spec }: { spec?: ComponentSpec }) {
   const { fitView } = useReactFlow();
@@ -149,8 +150,11 @@ export function SystemPanel() {
   const design = useApp((s) => s.design);
   const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
   const audioRunning = useApp((s) => s.audioRunning);
-  const [tab, setTab] = useState<'info' | 'check'>('info');
+  const tab = useApp((s) => s.ui.panelTab);
+  const setPanelTab = useApp((s) => s.setPanelTab);
   const { fitView } = useReactFlow();
+
+  const setTab = (t: 'info' | 'check' | 'patterns') => setPanelTab(t);
 
   const handleToggle = (newState: boolean) => {
     setOpen(newState);
@@ -200,10 +204,16 @@ export function SystemPanel() {
           >
             Check {issueCount > 0 && <span className="pl-badge">{issueCount}</span>}
           </button>
+          <button
+            className={tab === 'patterns' ? 'is-on' : ''}
+            onClick={() => setTab('patterns')}
+          >
+            Patterns
+          </button>
         </div>
       </div>
       <div className="pl-system-content">
-        {tab === 'info' ? <InfoTab spec={spec} /> : <CheckTab />}
+        {tab === 'info' ? <InfoTab spec={spec} /> : tab === 'check' ? <CheckTab /> : <PatternBrowser />}
       </div>
     </section>
   );

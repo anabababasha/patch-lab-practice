@@ -166,6 +166,7 @@ interface UiState {
   toast: { id: number; msg: string } | null;
   rejections: string[];
   panelOpen: boolean;
+  panelTab: 'info' | 'check' | 'patterns';
 }
 
 interface AppState {
@@ -182,7 +183,7 @@ interface AppState {
   addWire(a: PinRef, b: PinRef): void;
   removeWire(id: string): void;
   setParam(nodeId: string, paramId: string, value: number): void;
-  setParamsBulk(nodeId: string, values: Record<string, number>): void;
+  setParamsBulk(nodeId: string, values: Record<string, number>, meta?: Record<string, string>): void;
   setName(name: string): void;
   setNodeMeta(nodeId: string, key: string, value: string): void;
   loadMediaFile(nodeId: string, file: File): Promise<void>;
@@ -199,6 +200,7 @@ interface AppState {
   clearTrace(): void;
   clearSelection(): void;
   setPanelOpen(open: boolean): void;
+  setPanelTab(tab: 'info' | 'check' | 'patterns'): void;
 
   beginDrag(): void;
   undo(): void;
@@ -267,6 +269,7 @@ export const useApp = create<AppState>((set, get) => {
       toast: null,
       rejections: [],
       panelOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
+      panelTab: 'info',
     },
     audioRunning: false,
     canUndo: false,
@@ -469,7 +472,7 @@ export const useApp = create<AppState>((set, get) => {
       retrace(); // dynamic routing (Router) can change the traced path
     },
 
-    setParamsBulk(nodeId, values) {
+    setParamsBulk(nodeId, values, meta) {
       const s = get();
       const node = s.design.nodes.find((n) => n.id === nodeId);
       if (!node) return;
@@ -478,7 +481,11 @@ export const useApp = create<AppState>((set, get) => {
 
       const nextNodes = s.design.nodes.map((n) => {
         if (n.id !== nodeId) return n;
-        return { ...n, params: { ...n.params, ...values } };
+        const newMeta = meta ? { ...n.meta, ...meta } : n.meta;
+        if (newMeta && Object.keys(newMeta).length === 0) {
+          // keep it clean if empty
+        }
+        return { ...n, params: { ...n.params, ...values }, meta: newMeta };
       });
 
       const nextDesign = { ...s.design, nodes: nextNodes };
@@ -609,6 +616,9 @@ export const useApp = create<AppState>((set, get) => {
     },
     setPanelOpen(open) {
       set((s) => ({ ui: { ...s.ui, panelOpen: open } }));
+    },
+    setPanelTab(tab) {
+      set((s) => ({ ui: { ...s.ui, panelTab: tab } }));
     },
 
     /* ------------------------------------------------ history/toast */
