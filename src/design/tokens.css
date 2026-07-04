@@ -922,6 +922,12 @@ body {
   margin-bottom: 24px;
 }
 
+.pl-examples-caption {
+  font: 450 12px var(--font-ui);
+  color: var(--text-secondary);
+  margin: 0 0 4px 0;
+}
+
 .pl-example-row {
   display: flex;
   align-items: center;

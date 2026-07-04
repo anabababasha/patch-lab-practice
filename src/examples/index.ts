@@ -1,11 +1,9 @@
 import { Design, NodeInstance, Wire } from '../lib/types';
 import { registry } from '../components/registry';
 
-let idSeq = 1;
-const uid = (prefix: string) => `${prefix}_ex_${idSeq++}`;
+const uid = (prefix: string) => `${prefix}_ex_${Math.random().toString(36).slice(2, 9)}`;
 
 function buildExample(cb: (n: (type: string, x: number, y: number, params?: Record<string, number>) => string, w: (fromNode: string, fromPin: string, toNode: string, toPin: string) => void) => void): Design {
-  idSeq = 1;
   const nodes: NodeInstance[] = [];
   const wires: Wire[] = [];
 

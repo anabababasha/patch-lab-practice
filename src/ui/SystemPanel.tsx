@@ -9,6 +9,7 @@ import { MiniFlow } from './MiniFlow';
 import { examples } from '../examples';
 
 function InfoTab({ spec }: { spec?: ComponentSpec }) {
+  const { fitView } = useReactFlow();
   if (spec && spec.help) {
     return (
       <div className="pl-system-tab pl-info-tab">
@@ -50,6 +51,7 @@ function InfoTab({ spec }: { spec?: ComponentSpec }) {
     <div className="pl-system-tab pl-info-tab pl-info-static">
       <div className="pl-examples-list">
         <h4>Examples</h4>
+        <p className="pl-examples-caption">Examples are added to your current design — use New to start clean.</p>
         {examples.map((ex) => (
           <div key={ex.id} className="pl-example-row">
             <div className="pl-example-text">
@@ -58,7 +60,10 @@ function InfoTab({ spec }: { spec?: ComponentSpec }) {
             </div>
             <button 
               className="pl-mini-btn"
-              onClick={() => useApp.getState().loadExample(ex.build())}
+              onClick={() => {
+                useApp.getState().insertExample(ex.build(), ex.name);
+                setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50);
+              }}
             >
               Load
             </button>

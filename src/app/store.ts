@@ -183,7 +183,7 @@ interface AppState {
   exportJson(): string;
   importJson(json: string): boolean;
   newDesign(): void;
-  loadExample(design: Design): void;
+  insertExample(design: Design, name: string): void;
   setAudioRunning(v: boolean): void;
 }
 
@@ -649,25 +649,65 @@ export const useApp = create<AppState>((set, get) => {
       }));
     },
 
-    loadExample(design) {
+    insertExample(design, name) {
       const sanitized = sanitizeDesign(design);
       if (!sanitized) return;
+
       snapshot(get().design);
-      commitStructural(sanitized);
+      const d = get().design;
+
+      let offsetX = 0;
+      if (d.nodes.length > 0) {
+        let maxX = -Infinity;
+        for (const n of d.nodes) if (n.x > maxX) maxX = n.x;
+        
+        let minIncomingX = Infinity;
+        for (const n of sanitized.nodes) if (n.x < minIncomingX) minIncomingX = n.x;
+
+        if (maxX !== -Infinity && minIncomingX !== Infinity) {
+          offsetX = (maxX + 120) - minIncomingX;
+        }
+      }
+
+      const typeCounts = new Map<string, number>();
+      for (const n of d.nodes) {
+        typeCounts.set(n.type, (typeCounts.get(n.type) || 0) + 1);
+      }
+
+      const incomingNodes = sanitized.nodes.map(n => {
+        const count = (typeCounts.get(n.type) || 0) + 1;
+        typeCounts.set(n.type, count);
+        const spec = registry[n.type];
+        const label = spec ? `${spec.name} ${count}` : n.label;
+        return {
+          ...n,
+          x: n.x + offsetX,
+          label
+        };
+      });
+
+      const mergedDesign = {
+        ...d,
+        nodes: [...d.nodes, ...incomingNodes],
+        wires: [...d.wires, ...sanitized.wires],
+      };
+
+      commitStructural(mergedDesign);
+
+      const incomingIds = incomingNodes.map(n => n.id);
+
       set((s) => ({
         ui: {
           ...s.ui,
-          selectedNodeIds: [],
+          selectedNodeIds: incomingIds,
           selectedWireId: null,
           trace: null,
           traceSource: null,
           tracePinned: false,
         },
       }));
-      const msg = sanitized.nodes.some(n => n.type === 'trigger_pad')
-        ? 'Loaded — tap TRIG'
-        : 'Loaded — press Start Audio';
-      get().showToast(msg);
+
+      get().showToast(`${name} added — drag to position it`);
     },
 
     setAudioRunning(v) {
