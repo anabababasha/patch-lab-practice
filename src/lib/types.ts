@@ -50,6 +50,10 @@ export interface ComponentSpec {
   /** inPinId -> outPinIds it feeds (used by the trace algorithm);
    *  function form = routing depends on params (e.g. Router) */
   internalRouting: InternalRouting;
+  help?: {
+    summary: string;
+    tips: string[];
+  };
   /** special node body renderers */
   display?: 'scope' | 'media' | 'mic';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;

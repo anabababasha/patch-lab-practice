@@ -63,7 +63,7 @@ body {
 
 .pl-main {
   display: grid;
-  grid-template-columns: 216px 1fr;
+  grid-template-columns: 216px 1fr auto;
   min-height: 0;
 }
 
@@ -185,7 +185,7 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
-  background: transparent;
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
   border: 1px solid transparent;
   border-radius: 6px;
   color: var(--text-secondary);
@@ -251,6 +251,7 @@ body {
   background: var(--surface-raised);
   border-bottom: 1px solid var(--border);
   border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent);
 }
 
 .pl-node__title {
@@ -544,6 +545,7 @@ body {
   align-items: center;
   gap: 10px;
   min-height: 30px;
+  min-width: 0;
 }
 
 .pl-param__label {
@@ -558,6 +560,7 @@ body {
   flex: 1;
   accent-color: var(--text-secondary);
   height: 3px;
+  min-width: 0;
 }
 
 .pl-param__number {
@@ -611,6 +614,165 @@ body {
   z-index: 100;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
+
+/* -------------------------------------------------------- system panel */
+
+.pl-system-panel {
+  width: 280px;
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: width 200ms ease-out;
+  overflow: hidden;
+}
+
+.pl-system-rail {
+  width: 28px;
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 12px;
+  cursor: pointer;
+  transition: width 200ms ease-out;
+  overflow: hidden;
+}
+
+.pl-system-rail-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  color: var(--text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+
+.pl-system-rail-badge {
+  background: var(--danger);
+  color: #000;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: bold;
+}
+.pl-system-rail-badge.is-warn {
+  background: var(--meter-peak);
+}
+
+.pl-system-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pl-system-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.pl-system-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.pl-badge {
+  background: var(--danger);
+  color: #000;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: bold;
+  margin-left: 6px;
+}
+
+.pl-info-header {
+  margin-bottom: 12px;
+}
+
+.pl-info-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.pl-info-eyebrow {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  letter-spacing: 0.08em;
+}
+
+.pl-info-summary {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.pl-info-tips h4,
+.pl-info-pins h4,
+.pl-issue-group h4,
+.pl-rejections h4,
+.pl-info-static h3 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.pl-info-tips ul,
+.pl-pin-legend,
+.pl-issue-group ul,
+.pl-rejections ul,
+.pl-info-static ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+}
+
+.pl-info-tips li,
+.pl-pin-legend li,
+.pl-issue-group li,
+.pl-rejections li,
+.pl-info-static li {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.pl-pin-kind {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  border: 1px solid var(--wire-idle);
+}
+.pl-pin-kind--audio { background: var(--wire-idle); }
+.pl-pin-kind--control { border-radius: 2px; transform: rotate(45deg); }
+
+.pl-issue {
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.pl-issue:hover {
+  border-color: var(--border-active);
+}
+.pl-issue--error { border-left: 3px solid var(--danger); }
+.pl-issue--warn { border-left: 3px solid var(--meter-peak); }
+.pl-issue--info { border-left: 3px solid var(--signal-4); }
 
 /* ----------------------------------------------- react-flow chrome */
 
@@ -693,6 +855,16 @@ body {
 
   .pl-inspector__params {
     grid-template-columns: 1fr;
+  }
+
+  .pl-system-panel,
+  .pl-system-rail {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.5);
   }
 }
 

@@ -6,6 +6,7 @@ import {
   MiniMap,
   ReactFlow,
   useReactFlow,
+  SelectionMode,
   type Connection,
   type NodeChange,
   type EdgeChange,
@@ -23,7 +24,7 @@ const edgeTypes: EdgeTypes = { signal: SignalEdge };
 
 export function FlowCanvas() {
   const design = useApp((s) => s.design);
-  const selectedNodeId = useApp((s) => s.ui.selectedNodeId);
+  const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
   const selectedWireId = useApp((s) => s.ui.selectedWireId);
   const { screenToFlowPosition } = useReactFlow();
 
@@ -43,7 +44,7 @@ export function FlowCanvas() {
     const ids = new Set<string>();
     const next = design.nodes.map((n) => {
       ids.add(n.id);
-      const selected = n.id === selectedNodeId;
+      const selected = selectedNodeIds.includes(n.id);
       const measured = measuredRef.current.get(n.id);
       const prev = cache.get(n.id);
       if (
@@ -71,7 +72,7 @@ export function FlowCanvas() {
     for (const id of measuredRef.current.keys())
       if (!ids.has(id)) measuredRef.current.delete(id);
     return next;
-  }, [design.nodes, selectedNodeId]);
+  }, [design.nodes, selectedNodeIds]);
 
   const edges: SignalEdgeType[] = useMemo(
     () =>
@@ -89,13 +90,25 @@ export function FlowCanvas() {
   );
 
   const onNodesChange = useCallback((changes: NodeChange<PinTableNodeType>[]) => {
-    const { moveNode } = useApp.getState();
+    const { moveNode, setSelectedNodes } = useApp.getState();
+    const s = useApp.getState();
+    let selChanged = false;
+    let nextSel = new Set(s.ui.selectedNodeIds);
+
     for (const ch of changes) {
       if (ch.type === 'position' && ch.position) {
         moveNode(ch.id, ch.position.x, ch.position.y);
       } else if (ch.type === 'dimensions' && ch.dimensions) {
         measuredRef.current.set(ch.id, ch.dimensions);
+      } else if (ch.type === 'select') {
+        selChanged = true;
+        if (ch.selected) nextSel.add(ch.id);
+        else nextSel.delete(ch.id);
       }
+    }
+    
+    if (selChanged) {
+      setSelectedNodes(Array.from(nextSel));
     }
   }, []);
 
@@ -135,7 +148,18 @@ export function FlowCanvas() {
       const s = useApp.getState();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        s.undo();
+        if (e.shiftKey) s.redo();
+        else s.undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        s.redo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        s.selectAll();
         return;
       }
       if (e.key === 'Escape') {
@@ -146,9 +170,9 @@ export function FlowCanvas() {
         if (s.ui.selectedWireId) {
           e.preventDefault();
           s.removeWire(s.ui.selectedWireId);
-        } else if (s.ui.selectedNodeId) {
+        } else if (s.ui.selectedNodeIds.length > 0) {
           e.preventDefault();
-          s.removeNode(s.ui.selectedNodeId);
+          s.removeNodes(s.ui.selectedNodeIds);
         }
       }
     };
@@ -165,7 +189,8 @@ export function FlowCanvas() {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
-      onNodeClick={(_, n) => useApp.getState().selectNode(n.id)}
+      isValidConnection={() => true}
+      onNodeClick={(_, n) => useApp.getState().setSelectedNodes([n.id])}
       onNodeDragStart={() => useApp.getState().beginDrag()}
       onPaneClick={() => useApp.getState().clearSelection()}
       onDrop={onDrop}
@@ -173,6 +198,7 @@ export function FlowCanvas() {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
       }}
+      selectionMode={SelectionMode.Partial}
       // pin clicks pin the trace (the signature interaction) — connecting is drag-only
       connectOnClick={false}
       deleteKeyCode={null}

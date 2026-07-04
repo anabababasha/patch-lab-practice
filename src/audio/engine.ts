@@ -57,7 +57,13 @@ class AudioEngine {
     const ctx = this.ctx;
     if (!ctx) return;
 
-    for (const u of this.units.values()) u.dispose();
+    for (const u of this.units.values()) {
+      try {
+        u.dispose();
+      } catch (e) {
+        /* bare .disconnect() on an unwired node throws in some browsers; ignore */
+      }
+    }
     this.units.clear();
 
     const meters = new Map<string, AnalyserNode>();

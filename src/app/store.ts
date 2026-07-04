@@ -133,21 +133,26 @@ type TraceSource =
   | { kind: 'wire'; wireId: string };
 
 interface UiState {
-  selectedNodeId: string | null;
+  selectedNodeIds: string[];
   selectedWireId: string | null;
   trace: TraceResult | null;
   traceSource: TraceSource | null;
   tracePinned: boolean;
   toast: { id: number; msg: string } | null;
+  rejections: string[];
+  panelOpen: boolean;
 }
 
 interface AppState {
   design: Design;
   ui: UiState;
   audioRunning: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 
   addNode(type: string, x: number, y: number): void;
   moveNode(id: string, x: number, y: number): void;
+  removeNodes(ids: string[]): void;
   removeNode(id: string): void;
   addWire(a: PinRef, b: PinRef): void;
   removeWire(id: string): void;
@@ -156,7 +161,9 @@ interface AppState {
   setNodeMeta(nodeId: string, key: string, value: string): void;
   loadMediaFile(nodeId: string, file: File): Promise<void>;
 
-  selectNode(id: string | null): void;
+  setSelectedNodes(ids: string[]): void;
+  addToSelection(id: string): void;
+  selectAll(): void;
   selectWire(id: string | null): void;
   hoverTracePin(pin: PinRef | null): void;
   hoverTraceWire(wireId: string | null): void;
@@ -164,9 +171,11 @@ interface AppState {
   pinTraceWire(wireId: string): void;
   clearTrace(): void;
   clearSelection(): void;
+  setPanelOpen(open: boolean): void;
 
   beginDrag(): void;
   undo(): void;
+  redo(): void;
   showToast(msg: string): void;
   dismissToast(): void;
 
@@ -177,11 +186,21 @@ interface AppState {
 }
 
 let history: Design[] = [];
+let redoStack: Design[] = [];
 let lastParamStamp = { key: '', time: 0 };
+
+const updateHistoryState = () => {
+  useApp.setState({
+    canUndo: history.length > 0,
+    canRedo: redoStack.length > 0,
+  });
+};
 
 const snapshot = (d: Design) => {
   history.push(structuredClone(d));
   if (history.length > HISTORY_MAX) history.shift();
+  redoStack = [];
+  updateHistoryState();
 };
 
 export const useApp = create<AppState>((set, get) => {
@@ -207,14 +226,18 @@ export const useApp = create<AppState>((set, get) => {
   return {
     design: loadSaved() ?? emptyDesign(),
     ui: {
-      selectedNodeId: null,
+      selectedNodeIds: [],
       selectedWireId: null,
       trace: null,
       traceSource: null,
       tracePinned: false,
       toast: null,
+      rejections: [],
+      panelOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
     },
     audioRunning: false,
+    canUndo: false,
+    canRedo: false,
 
     /* -------------------------------------------------------- nodes */
 
@@ -236,7 +259,7 @@ export const useApp = create<AppState>((set, get) => {
       };
       commitStructural({ ...d, nodes: [...d.nodes, node] });
       set((s) => ({
-        ui: { ...s.ui, selectedNodeId: node.id, selectedWireId: null },
+        ui: { ...s.ui, selectedNodeIds: [node.id], selectedWireId: null },
       }));
     },
 
@@ -250,28 +273,33 @@ export const useApp = create<AppState>((set, get) => {
       saveSoon(design); // position-only: no rebuild, no snapshot (beginDrag did)
     },
 
-    removeNode(id) {
+    removeNodes(ids) {
+      if (ids.length === 0) return;
       const d = get().design;
-      if (!d.nodes.some((n) => n.id === id)) return;
+      const idSet = new Set(ids);
+      if (!d.nodes.some((n) => idSet.has(n.id))) return;
       snapshot(d);
       const design: Design = {
         ...d,
-        nodes: d.nodes.filter((n) => n.id !== id),
+        nodes: d.nodes.filter((n) => !idSet.has(n.id)),
         wires: d.wires.filter(
-          (w) => w.from.nodeId !== id && w.to.nodeId !== id,
+          (w) => !idSet.has(w.from.nodeId) && !idSet.has(w.to.nodeId),
         ),
       };
       commitStructural(design);
       set((s) => ({
         ui: {
           ...s.ui,
-          selectedNodeId:
-            s.ui.selectedNodeId === id ? null : s.ui.selectedNodeId,
+          selectedNodeIds: s.ui.selectedNodeIds.filter((id) => !idSet.has(id)),
           trace: null,
           traceSource: null,
           tracePinned: false,
         },
       }));
+    },
+
+    removeNode(id) {
+      get().removeNodes([id]);
     },
 
     /* -------------------------------------------------------- wires */
@@ -294,19 +322,27 @@ export const useApp = create<AppState>((set, get) => {
       const toPin = pinOf(to);
       if (fromPin?.direction !== 'out' || toPin?.direction !== 'in') return;
 
+      const reject = (msg: string) => {
+        set((s) => ({
+          ui: {
+            ...s.ui,
+            toast: { id: Date.now(), msg },
+            rejections: [msg, ...s.ui.rejections].slice(0, 5),
+          },
+        }));
+      };
+
       if (fromPin.kind !== toPin.kind) {
-        get().showToast(
-          'Signal kinds must match — control outs (dashed) go to Mod inputs.',
-        );
+        reject('Signal kinds must match — control outs (dashed) go to Mod inputs.');
         return;
       }
       if (from.nodeId === to.nodeId) {
-        get().showToast('A component cannot feed itself.');
+        reject('A component cannot feed itself.');
         return;
       }
       const inKey = `${to.nodeId}:${to.pinId}`;
       if (d.wires.some((w) => `${w.to.nodeId}:${w.to.pinId}` === inKey)) {
-        get().showToast('Inputs accept one wire — use a Mixer to sum.');
+        reject('Inputs accept one wire — use a Mixer to sum.');
         return;
       }
       // cycle check (node-level, conservative)
@@ -329,7 +365,7 @@ export const useApp = create<AppState>((set, get) => {
         for (const m of adj.get(n) ?? []) stack.push(m);
       }
       if (cyclic) {
-        get().showToast('That would create a feedback loop.');
+        reject('That would create a feedback loop.');
         return;
       }
 
@@ -417,14 +453,27 @@ export const useApp = create<AppState>((set, get) => {
 
     /* ---------------------------------------------- selection/trace */
 
-    selectNode(id) {
+    setSelectedNodes(ids) {
       set((s) => ({
-        ui: { ...s.ui, selectedNodeId: id, selectedWireId: null },
+        ui: { ...s.ui, selectedNodeIds: ids, selectedWireId: null },
+      }));
+    },
+    addToSelection(id) {
+      set((s) => {
+        if (s.ui.selectedNodeIds.includes(id)) return s;
+        return {
+          ui: { ...s.ui, selectedNodeIds: [...s.ui.selectedNodeIds, id], selectedWireId: null },
+        };
+      });
+    },
+    selectAll() {
+      set((s) => ({
+        ui: { ...s.ui, selectedNodeIds: s.design.nodes.map(n => n.id), selectedWireId: null },
       }));
     },
     selectWire(id) {
       set((s) => ({
-        ui: { ...s.ui, selectedWireId: id, selectedNodeId: null },
+        ui: { ...s.ui, selectedWireId: id, selectedNodeIds: [] },
       }));
     },
 
@@ -483,13 +532,16 @@ export const useApp = create<AppState>((set, get) => {
       set((s) => ({
         ui: {
           ...s.ui,
-          selectedNodeId: null,
+          selectedNodeIds: [],
           selectedWireId: null,
           trace: null,
           traceSource: null,
           tracePinned: false,
         },
       }));
+    },
+    setPanelOpen(open) {
+      set((s) => ({ ui: { ...s.ui, panelOpen: open } }));
     },
 
     /* ------------------------------------------------ history/toast */
@@ -501,11 +553,27 @@ export const useApp = create<AppState>((set, get) => {
     undo() {
       const prev = history.pop();
       if (!prev) return;
+      redoStack.push(structuredClone(get().design));
       const design = prev;
       set((s) => ({
         design,
         ui: { ...s.ui, trace: null, traceSource: null, tracePinned: false },
       }));
+      updateHistoryState();
+      saveSoon(design);
+      engine.requestRebuild(design);
+    },
+
+    redo() {
+      const next = redoStack.pop();
+      if (!next) return;
+      history.push(structuredClone(get().design));
+      const design = next;
+      set((s) => ({
+        design,
+        ui: { ...s.ui, trace: null, traceSource: null, tracePinned: false },
+      }));
+      updateHistoryState();
       saveSoon(design);
       engine.requestRebuild(design);
     },
@@ -541,7 +609,7 @@ export const useApp = create<AppState>((set, get) => {
       set((s) => ({
         ui: {
           ...s.ui,
-          selectedNodeId: null,
+          selectedNodeIds: [],
           selectedWireId: null,
           trace: null,
           traceSource: null,
@@ -557,7 +625,7 @@ export const useApp = create<AppState>((set, get) => {
       set((s) => ({
         ui: {
           ...s.ui,
-          selectedNodeId: null,
+          selectedNodeIds: [],
           selectedWireId: null,
           trace: null,
           traceSource: null,

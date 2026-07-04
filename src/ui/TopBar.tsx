@@ -8,6 +8,10 @@ export function TopBar() {
   const audioRunning = useApp((s) => s.audioRunning);
   const setAudioRunning = useApp((s) => s.setAudioRunning);
   const undo = useApp((s) => s.undo);
+  const redo = useApp((s) => s.redo);
+  const selectAll = useApp((s) => s.selectAll);
+  const canUndo = useApp((s) => s.canUndo);
+  const canRedo = useApp((s) => s.canRedo);
   const newDesign = useApp((s) => s.newDesign);
   const exportJson = useApp((s) => s.exportJson);
   const importJson = useApp((s) => s.importJson);
@@ -58,8 +62,26 @@ export function TopBar() {
       >
         {audioRunning ? '● Audio running' : 'Start Audio ▸'}
       </button>
-      <button className="pl-btn" onClick={undo} title="Undo (Ctrl/Cmd+Z)">
+      <button 
+        className="pl-btn" 
+        onClick={undo} 
+        disabled={!canUndo}
+        style={{ cursor: canUndo ? 'pointer' : 'default', color: canUndo ? '' : 'var(--text-disabled)' }}
+        title="Undo (Ctrl/Cmd+Z)"
+      >
         Undo
+      </button>
+      <button 
+        className="pl-btn" 
+        onClick={redo} 
+        disabled={!canRedo}
+        style={{ cursor: canRedo ? 'pointer' : 'default', color: canRedo ? '' : 'var(--text-disabled)' }}
+        title="Redo (Ctrl/Cmd+Shift+Z)"
+      >
+        Redo
+      </button>
+      <button className="pl-btn" onClick={selectAll} title="Select All (Ctrl/Cmd+A)">
+        Select All
       </button>
       <button className="pl-btn" onClick={newDesign}>
         New

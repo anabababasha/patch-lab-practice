@@ -4,6 +4,7 @@ import { Palette } from './ui/Palette';
 import { FlowCanvas } from './ui/FlowCanvas';
 import { Inspector } from './ui/Inspector';
 import { Toast } from './ui/Toast';
+import { SystemPanel } from './ui/SystemPanel';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
             <FlowCanvas />
             <Inspector />
           </div>
+          <SystemPanel />
         </div>
       </ReactFlowProvider>
       <Toast />

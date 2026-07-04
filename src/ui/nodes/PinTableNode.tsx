@@ -9,8 +9,9 @@ import { HEADER_H, ROW_H, hueFor } from '../constants';
 
 export type PinTableNodeType = Node<{ pl: true }, 'pinTable'>;
 
-function PinTableNodeImpl({ id, selected }: NodeProps<PinTableNodeType>) {
+function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const node = useApp((s) => s.design.nodes.find((n) => n.id === id));
+  const selected = useApp((s) => s.ui.selectedNodeIds.includes(id));
   const trace = useApp((s) => s.ui.trace);
   const hoverTracePin = useApp((s) => s.hoverTracePin);
   const pinTracePin = useApp((s) => s.pinTracePin);
@@ -76,7 +77,7 @@ function PinTableNodeImpl({ id, selected }: NodeProps<PinTableNodeType>) {
             onClick={(e) => {
               e.stopPropagation();
               pinTracePin({ nodeId: id, pinId: pin.id });
-              useApp.getState().selectNode(id);
+              useApp.getState().setSelectedNodes([id]);
             }}
           >
             <span className="pl-pinrow__index">{idx}</span>

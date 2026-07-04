@@ -125,6 +125,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('level', 'Level', -60, 0, -20),
     ],
     internalRouting: {},
+    help: {
+      summary: 'Test-signal oscillator. In real systems you\'d use a generator like this to verify a signal path before the source arrives.',
+      tips: ['Sine at −20 dB is a safe alignment tone.', 'Square/saw are harmonically rich — good for hearing filters work.'],
+    },
     createAudio: createSignalGen,
   },
 
@@ -138,6 +142,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('level', 'Level', -60, 0, -20),
     ],
     internalRouting: {},
+    help: {
+      summary: 'Pink or white noise source. Pink noise has equal energy per octave — the standard for tuning rooms and speakers.',
+      tips: ['Use pink noise + Filter to hear crossover-style slopes.', 'White noise sounds brighter because it has more high-frequency energy.'],
+    },
     createAudio: createNoiseGen,
   },
 
@@ -152,6 +160,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('level', 'Level', -60, 0, -6),
     ],
     internalRouting: {},
+    help: {
+      summary: 'Plays an audio file you load from disk. Files are decoded in memory and do not survive a page reload.',
+      tips: ['Loop a music track to test your full chain.', 'Level defaults to −6 dB — headroom before the master.'],
+    },
     display: 'media',
     createAudio: createMediaPlayer,
   },
@@ -163,6 +175,10 @@ export const registry: Record<string, ComponentSpec> = {
     pins: [aOut('out', 'Output')],
     params: [toggle('enable', 'Enable'), db('level', 'Level', -60, 12, -6)],
     internalRouting: {},
+    help: {
+      summary: 'Live microphone input via the browser, with echo cancellation and auto-gain OFF for honest measurement.',
+      tips: ['First Enable asks the browser for permission.', 'Watch for feedback: mute your speakers or use headphones.'],
+    },
     display: 'mic',
     createAudio: createMicIn,
   },
@@ -189,6 +205,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('depth', 'Depth', 50),
     ],
     internalRouting: {},
+    help: {
+      summary: 'Low-frequency oscillator — a control signal, not audio. Wire its dashed Mod Out into a Mod input to animate a parameter.',
+      tips: ['LFO → Gain Mod = tremolo.', 'LFO → Filter Mod = auto-wah.', 'LFO → Delay Mod = chorus/vibrato.', 'One LFO can fan out to several Mod inputs.'],
+    },
     createAudio: createLFO,
   },
 
@@ -205,6 +225,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('modAmt', 'Mod Amt', 0),
     ],
     internalRouting: { in: ['out'], mod: ['out'] },
+    help: {
+      summary: 'Level control with mute. Its Mod input adds the incoming control signal to the gain — the building block of tremolo and VCA-style envelopes.',
+      tips: ['Mod Amt scales how strongly modulation moves the level — 0 % means no effect.', 'Set Gain very low and let an Envelope push it up: that\'s a VCA.'],
+    },
     createAudio: createGain,
   },
 
@@ -229,6 +253,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('modAmt', 'Mod Amt', 0),
     ],
     internalRouting: { in: ['out'], mod: ['out'] },
+    help: {
+      summary: 'Single biquad filter: low-pass, high-pass, band-pass, or notch. Mod input sweeps the cutoff (±2 octaves at 100 %).',
+      tips: ['High Q + band-pass ≈ resonant sweep.', 'Notch is what you\'d reach for to kill a feedback frequency.'],
+    },
     createAudio: createFilter,
   },
 
@@ -268,6 +296,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('hsGain', 'HS Gain', -15, 15, 0),
     ],
     internalRouting: { in: ['out'] },
+    help: {
+      summary: '4-band parametric EQ: low shelf, two peaking bands, high shelf — the workhorse of system tuning.',
+      tips: ['Cut before you boost.', 'Narrow Q for surgical cuts, wide Q for tone shaping.'],
+    },
     createAudio: createPEQ,
   },
 
@@ -320,6 +352,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('makeup', 'Makeup', 0, 24, 0),
     ],
     internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Dynamics control: reduces level above the threshold by the ratio. Makeup gain restores loudness.',
+      tips: ['Start: threshold −24 dB, ratio 4:1, attack 10 ms, release 150 ms.', 'Extreme ratio + fast attack = limiter behavior.'],
+    },
     createAudio: createCompressor,
   },
 
@@ -344,6 +380,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('modAmt', 'Mod Amt', 0),
     ],
     internalRouting: { in: ['out'], mod: ['out'] },
+    help: {
+      summary: 'Echo with feedback and wet/dry mix. Its Mod input wobbles the delay time — small amounts give chorus and vibrato.',
+      tips: ['Feedback above 70 % builds up fast — watch the meters.', '1–20 ms + modulation = chorus', '100 ms+ = distinct echoes.'],
+    },
     createAudio: createDelay,
   },
 
@@ -366,6 +406,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('mix', 'Mix', 30),
     ],
     internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Convolution reverb with a synthesized impulse response. Decay sets the tail length.',
+      tips: ['Keep Mix below 50 % for realism.', 'Long decay + high mix = washed-out; use an EQ after to tame lows.'],
+    },
     createAudio: createReverb,
   },
 
@@ -389,6 +433,10 @@ export const registry: Record<string, ComponentSpec> = {
       db('level', 'Level', -24, 6, -3),
     ],
     internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Waveshaping saturation. Drive pushes the signal into a tanh curve — from warm to aggressive.',
+      tips: ['Lower the output Level as you raise Drive.', 'Try Filter AFTER distortion to sculpt the harmonics it adds.'],
+    },
     createAudio: createDistortion,
   },
 
@@ -410,6 +458,10 @@ export const registry: Record<string, ComponentSpec> = {
       pct('modAmt', 'Mod Amt', 0),
     ],
     internalRouting: { in: ['out'], mod: ['out'] },
+    help: {
+      summary: 'Stereo position. Mod input auto-pans (±100 % at full amount).',
+      tips: ['Slow LFO → Panner Mod = classic auto-pan.', 'Hard-panned generators are useful for checking L/R wiring.'],
+    },
     createAudio: createPanner,
   },
 
@@ -438,6 +490,10 @@ export const registry: Record<string, ComponentSpec> = {
       in2: ['out'],
       in3: ['out'],
       in4: ['out'],
+    },
+    help: {
+      summary: 'Sums up to four sources with per-input level and a master trim — how multiple chains reach one output.',
+      tips: ['Inputs sum: four hot signals can overload — trim each.', 'This is the ONLY way to merge signals; inputs accept one wire each.'],
     },
     createAudio: createMixer,
   },
@@ -471,6 +527,10 @@ export const registry: Record<string, ComponentSpec> = {
       }
       return map;
     },
+    help: {
+      summary: '4×4 crosspoint matrix. Toggle any input to any output — and the trace highlight follows the LIVE routing state.',
+      tips: ['Pin a trace on an input, then flip crosspoints and watch the path move.', 'An input routed to nothing is silent — the Check tab flags it.'],
+    },
     createAudio: createRouter,
   },
 
@@ -483,6 +543,10 @@ export const registry: Record<string, ComponentSpec> = {
     pins: [aIn('in', 'Input'), aOut('out', 'Thru')],
     params: [select('mode', 'Display', ['Waveform', 'Spectrum'])],
     internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Pass-through scope: waveform or log-frequency spectrum, drawn live in the node.',
+      tips: ['Waveform shows shape and clipping; Spectrum shows tonal balance.', 'Put one before AND after a processor to see what it does.'],
+    },
     display: 'scope',
     createAudio: createAnalyzer,
   },
@@ -496,6 +560,10 @@ export const registry: Record<string, ComponentSpec> = {
     pins: [aIn('in', 'Input')],
     params: [db('level', 'Level', -60, 0, -6)],
     internalRouting: { in: [] },
+    help: {
+      summary: 'The speakers. Includes a permanent safety limiter at −1 dBFS; the meter reads PRE-limiter so you can see an overdriven sum you\'ll never hear.',
+      tips: ['Red clip segment = your mix is over; turn sources down, not just this fader.', 'Multiple Master Outputs are allowed but usually a mistake.'],
+    },
     createAudio: createMasterOut,
   },
 };

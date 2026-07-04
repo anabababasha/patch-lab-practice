@@ -103,13 +103,33 @@ function ParamControl({
 }
 
 export function Inspector() {
-  const selectedId = useApp((s) => s.ui.selectedNodeId);
-  const node = useApp((s) =>
-    s.design.nodes.find((n) => n.id === s.ui.selectedNodeId),
-  );
+  const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
+  const nodes = useApp((s) => s.design.nodes);
+  const removeNodes = useApp((s) => s.removeNodes);
   const removeNode = useApp((s) => s.removeNode);
 
-  if (!selectedId || !node) return null;
+  if (selectedNodeIds.length === 0) return null;
+
+  if (selectedNodeIds.length > 1) {
+    return (
+      <section className="pl-inspector" aria-label="Inspector">
+        <div className="pl-inspector__head">
+          <span className="pl-inspector__title">{selectedNodeIds.length} components selected</span>
+          <button
+            className="pl-btn pl-btn--danger"
+            onClick={() => removeNodes(selectedNodeIds)}
+          >
+            Delete all
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const selectedId = selectedNodeIds[0];
+  const node = nodes.find((n) => n.id === selectedId);
+
+  if (!node) return null;
   const spec = registry[node.type];
   if (!spec) return null;
 
