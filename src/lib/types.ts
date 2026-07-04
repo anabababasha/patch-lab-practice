@@ -65,7 +65,7 @@ export interface ComponentSpec {
     }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer';
+  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

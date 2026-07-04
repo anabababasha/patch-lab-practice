@@ -5,6 +5,8 @@ import { scopeService } from './scopeService';
 import { mediaCache } from './mediaCache';
 import { transportService } from './transportService';
 import { triggerBus } from './triggerBus';
+import { recorderService } from './recorderService';
+import { looperService } from './looperService';
 
 /**
  * Compile strategy: correctness over cleverness.
@@ -108,6 +110,9 @@ class AudioEngine {
 
     meterService.setAnalysers(meters);
     scopeService.setAnalysers(scopes);
+    
+    recorderService.prune(ctx, new Set(design.nodes.map(n => n.id)));
+    looperService.prune(ctx, new Set(design.nodes.map(n => n.id)));
   }
 
   /** Live, smoothed, no rebuild. */

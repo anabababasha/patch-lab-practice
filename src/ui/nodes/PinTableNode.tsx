@@ -5,6 +5,8 @@ import { registry } from '../../components/registry';
 import { pinKey } from '../../lib/types';
 import { meterService } from '../../audio/meterService';
 import { scopeService, type ScopeMode } from '../../audio/scopeService';
+import { recorderService } from '../../audio/recorderService';
+import { looperService } from '../../audio/looperService';
 import { HEADER_H, ROW_H, hueFor } from '../constants';
 
 import { patterns } from '../../patterns';
@@ -62,6 +64,11 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     [id],
   );
   const seqRef = useRef<HTMLDivElement>(null);
+  const recTimeRef = useRef<HTMLSpanElement>(null);
+  const loopTimeRef = useRef<HTMLSpanElement>(null);
+
+  const [recState, setRecState] = React.useState<{state: string, startedAt: number, lastTakeSeconds: number}>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
+  const [loopState, setLoopState] = React.useState<{state: string, startedAt: number}>({ state: 'empty', startedAt: 0 });
 
   const conn = useConnection();
   const wires = useApp((s) => s.design.wires);
@@ -141,6 +148,50 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     }
     return { pat, edited };
   }, [spec?.display, node?.meta?.pattern, node?.params]);
+
+  React.useEffect(() => {
+    if (spec?.display === 'recorder') {
+      const unsub = recorderService.onState(id, (state, startedAt, lastTakeSeconds) => {
+        setRecState({ state, startedAt, lastTakeSeconds });
+      });
+      return () => { unsub(); };
+    }
+  }, [id, spec?.display]);
+
+  React.useEffect(() => {
+    if (recState.state !== 'recording') return;
+    const timer = setInterval(() => {
+      if (recTimeRef.current) {
+        const s = Math.round((Date.now() - recState.startedAt) / 1000);
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        recTimeRef.current.textContent = `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [recState.state, recState.startedAt]);
+
+  React.useEffect(() => {
+    if (spec?.display === 'looper') {
+      const unsub = looperService.onState(id, (state, startedAt) => {
+        setLoopState({ state, startedAt });
+      });
+      return () => { unsub(); };
+    }
+  }, [id, spec?.display]);
+
+  React.useEffect(() => {
+    if (loopState.state !== 'recording') return;
+    const timer = setInterval(() => {
+      if (loopTimeRef.current) {
+        const s = Math.round((Date.now() - loopState.startedAt) / 1000);
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        loopTimeRef.current.textContent = `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [loopState.state, loopState.startedAt]);
 
   const crossLayerTargets = React.useMemo(() => {
     const targets = new Map<string, string>();
@@ -326,6 +377,101 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
           >
             TRIG
           </button>
+        </div>
+      )}
+
+      {spec.display === 'recorder' && (
+        <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <button
+            className={`pl-pad nodrag ${recState.state === 'recording' ? 'is-pressed' : ''}`}
+            style={{ width: '100%', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            disabled={recState.state === 'unsupported'}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              const app = useApp.getState();
+              if (recState.state === 'idle') {
+                app.startRecording(id);
+              } else if (recState.state === 'recording') {
+                app.stopRecording(id);
+              }
+            }}
+          >
+            {recState.state === 'unsupported' ? (
+              <span>Not Supported</span>
+            ) : recState.state === 'recording' ? (
+              <>
+                <span style={{ fontSize: '10px' }}>■</span>
+                <span>STOP</span>
+                <span ref={recTimeRef} style={{ fontVariantNumeric: 'tabular-nums', marginLeft: '4px' }}>00:00</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '12px' }}>○</span>
+                <span>REC</span>
+              </>
+            )}
+          </button>
+          {recState.state !== 'recording' && recState.lastTakeSeconds > 0 && (
+            <div style={{ fontSize: '10px', color: 'var(--text-disabled)', textAlign: 'center' }}>
+              last take {Math.floor(recState.lastTakeSeconds / 60).toString().padStart(2, '0')}:{(recState.lastTakeSeconds % 60).toString().padStart(2, '0')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {spec.display === 'looper' && (
+        <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              className={`pl-pad nodrag ${loopState.state === 'recording' ? 'is-pressed' : ''}`}
+              style={{ flex: 1, height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                useApp.getState().looperAction(id, (node.params.sync ?? 1) > 0.5);
+              }}
+            >
+              {loopState.state === 'empty' ? (
+                <>
+                  <span style={{ fontSize: '12px' }}>○</span>
+                  <span>REC</span>
+                </>
+              ) : loopState.state === 'recording' ? (
+                <>
+                  <span style={{ fontSize: '10px' }}>■</span>
+                  <span>STOP</span>
+                </>
+              ) : loopState.state === 'playing' ? (
+                <>
+                  <span style={{ fontSize: '10px' }}>■</span>
+                  <span>STOP</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: '12px' }}>▶</span>
+                  <span>PLAY</span>
+                </>
+              )}
+            </button>
+            <button
+              className="pl-pad nodrag"
+              style={{ width: '44px', height: '44px' }}
+              disabled={loopState.state === 'empty' || loopState.state === 'recording'}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                useApp.getState().looperClear(id);
+              }}
+            >
+              CLR
+            </button>
+          </div>
+          <div style={{ fontSize: '10px', color: loopState.state === 'recording' ? 'var(--danger)' : 'var(--text-disabled)', textAlign: 'center', height: '12px' }}>
+            {loopState.state === 'empty' && 'empty'}
+            {loopState.state === 'recording' && (
+              <>recording... <span ref={loopTimeRef} style={{ fontVariantNumeric: 'tabular-nums' }}>00:00</span></>
+            )}
+            {loopState.state === 'playing' && 'playing'}
+            {loopState.state === 'stopped' && 'stopped'}
+          </div>
         </div>
       )}
 

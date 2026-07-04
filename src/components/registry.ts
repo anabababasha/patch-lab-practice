@@ -10,6 +10,8 @@ import {
   createMasterOut,
   createMediaPlayer,
   createMicIn,
+  createRecorder,
+  createSampler,
   createMixer,
   createNoiseGen,
   createPanner,
@@ -20,6 +22,7 @@ import {
   createTriggerPad,
   createEnvelope,
   createStepSequencer,
+  createLooper,
 } from '../audio/units';
 
 /* ------------------------------------------------------------ helpers */
@@ -250,6 +253,33 @@ export const registry: Record<string, ComponentSpec> = {
     },
     display: 'mic',
     createAudio: createMicIn,
+  },
+
+  sampler: {
+    type: 'sampler',
+    name: 'Sampler',
+    category: 'source',
+    pins: [tIn('trig', 'Trig'), cIn('pitch', 'Pitch'), aOut('out', 'Output')],
+    params: [
+      db('level', 'Level', -60, 12, -6),
+      { id: 'tune', label: 'Tune', unit: '', min: -24, max: 24, step: 1, default: 0 },
+      { id: 'pitchAmt', label: 'Pitch Mod', unit: '', min: -4800, max: 4800, step: 10, default: 2400 },
+      toggle('choke', 'Choke', 1),
+    ],
+    internalRouting: { trig: ['out'], pitch: ['out'] },
+    help: {
+      summary: 'Plays a loaded recording once per trigger — the sequencer\'s voice for REAL sounds.',
+      tips: [
+        'Load a real doum or tak recording and sequence it from the Step Sequencer.',
+        'Tune shifts in semitones; Pitch Mod lets an Envelope or MIDI bend each hit.',
+        'Choke off = overlapping tails (cymbals); on = tight drums.',
+      ],
+      flows: [
+        { title: 'Sampled drum', chain: [{label:'Step Seq · Row 1'}, {label:'Sampler', kind:'trigger'}, {label:'Mixer / Master', kind:'audio'}] },
+      ],
+    },
+    display: 'media',
+    createAudio: createSampler,
   },
 
   /* ---------------------------------------------------- modulation */
@@ -665,7 +695,57 @@ export const registry: Record<string, ComponentSpec> = {
     createAudio: createAnalyzer,
   },
 
+  looper: {
+    type: 'looper',
+    name: 'Looper',
+    category: 'dsp',
+    pins: [aIn('in', 'Input'), aOut('out', 'Output')],
+    params: [
+      db('loopLevel', 'Loop', -60, 6, 0),
+      db('thruLevel', 'Thru', -60, 6, 0),
+      toggle('sync', 'Bar sync', 1),
+    ],
+    internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Captures what flows through it and loops it — layer a performance in real time.',
+      tips: [
+        'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
+        'Thru and Loop levels let you fade between live playing and the loop.',
+      ],
+      flows: [
+        {
+          title: 'Live layering',
+          chain: [{ label: 'Sampler / Synth' }, { label: 'Looper', kind: 'audio' }, { label: 'Master Out', kind: 'audio' }],
+        },
+      ],
+    },
+    display: 'looper',
+    createAudio: createLooper,
+  },
+
   /* --------------------------------------------------------- output */
+
+  recorder: {
+    type: 'recorder',
+    name: 'Recorder',
+    category: 'output',
+    pins: [aIn('in', 'Input'), aOut('out', 'Thru')],
+    params: [select('format', 'Format', ['WAV', 'WebM'], 0)],
+    internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Records everything flowing through it to an audio file — press REC, perform, press STOP, the file downloads.',
+      tips: [
+        'WAV opens everywhere; WebM is far smaller for long takes.',
+        'Place it between your final Mixer and the Master Output to capture the whole performance.',
+        'Recording survives edits — patch live while the take rolls.',
+      ],
+      flows: [
+        { title: 'Capture a set', chain: [{label:'Mixer'}, {label:'Recorder', kind:'audio'}, {label:'Master Out', kind:'audio'}] },
+      ],
+    },
+    display: 'recorder',
+    createAudio: createRecorder,
+  },
 
   master_out: {
     type: 'master_out',
@@ -690,7 +770,7 @@ export const paletteOrder: Array<{
   {
     category: 'source',
     label: 'Sources',
-    types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in'],
+    types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in', 'sampler'],
   },
   { category: 'mod', label: 'Modulation', types: ['lfo', 'envelope', 'trigger_pad', 'step_seq'] },
   {
@@ -705,11 +785,12 @@ export const paletteOrder: Array<{
       'reverb',
       'distortion',
       'panner',
+      'looper',
     ],
   },
   { category: 'routing', label: 'Routing', types: ['mixer', 'router'] },
   { category: 'meter', label: 'Metering', types: ['analyzer'] },
-  { category: 'output', label: 'Outputs', types: ['master_out'] },
+  { category: 'output', label: 'Outputs', types: ['recorder', 'master_out'] },
 ];
 
 /** legacy type aliases from Build 1 designs */

@@ -44,6 +44,16 @@ Build 5a introduces **Layers**, allowing you to organize complex designs into na
 - **View-only organization**: Layers are purely visual. The audio engine, trace algorithm, and wires are always global. The design will sound identical regardless of which layer is actively visible.
 - **Cross-layer signals**: When viewing a single layer, pins that wire to components on other hidden layers show a purple outer ring and indicate their destination on hover.
 
+## Recording
+
+PatchLab allows you to capture your performances directly to an audio file. Add a **Recorder** node from the Outputs category and place it anywhere in your signal path (typically between your final Mixer and the Master Output).
+- **Format**: Captures to high-quality WAV or WebM.
+- **Mid-take editing**: The recording engine survives structural changes. You can patch live, add nodes, or delete nodes while the take rolls. Even if the Recorder node itself is deleted during a take, your performance is safely finalized and downloaded.
+
+## Looping
+
+The **Looper** node allows you to capture a performance through it, loop it instantly, and layer live playing over it. When **Bar sync** is on and the transport is playing, recording actions automatically quantize to the transport grid so your loops lock perfectly in time with the drum machine.
+
 ## Develop
 
 ```bash

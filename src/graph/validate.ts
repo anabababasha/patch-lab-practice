@@ -172,6 +172,53 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
       }
     }
 
+    if (node.type === 'sampler') {
+      const key = `${node.id}:trig`;
+      const hasTrig = inWires.has(key) && inWires.get(key)!.length > 0;
+      if (!hasTrig) {
+        issues.push({
+          id: `sampler-unconnected-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} will never fire — wire a Trigger Pad (or later, MIDI) to its Trig input.`,
+          nodeId: node.id,
+          pin: { nodeId: node.id, pinId: 'trig' },
+        });
+      } else if (!node.meta?.file) {
+        issues.push({
+          id: `sampler-nofile-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} has no sample loaded — tap Load file on the node.`,
+          nodeId: node.id,
+        });
+      }
+    }
+
+    if (node.type === 'recorder') {
+      const key = `${node.id}:in`;
+      if (!inWires.has(key) || inWires.get(key)!.length === 0) {
+        issues.push({
+          id: `recorder-unconnected-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} hears nothing — wire your mix into it.`,
+          nodeId: node.id,
+          pin: { nodeId: node.id, pinId: 'in' },
+        });
+      }
+    }
+
+    if (node.type === 'looper') {
+      const key = `${node.id}:in`;
+      if (!inWires.has(key) || inWires.get(key)!.length === 0) {
+        issues.push({
+          id: `looper-unconnected-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} hears nothing — wire your mix into it.`,
+          nodeId: node.id,
+          pin: { nodeId: node.id, pinId: 'in' },
+        });
+      }
+    }
+
     // Rule 8: Node with trigger output but zero wires
     if (node.type !== 'step_seq') {
       const triggerOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'trigger');

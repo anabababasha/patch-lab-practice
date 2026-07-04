@@ -157,4 +157,26 @@ export const examples = [
       w(mixer, 'out', master, 'in');
     }),
   },
+  {
+    id: 'sampler_kit_maqsum',
+    name: 'Sampler Kit (Maqsum)',
+    blurb: 'Load a low hit into Sampler A and a sharp one into B, press Play — Maqsum with your own sounds.',
+    build: () => buildExample((n, w) => {
+      const p: Record<string, number> = { steps: 8, rate: 0 }; // 0 = 1/8
+      [1,0,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+      [0,1,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+
+      const seq = n('step_seq', 0, 0, p);
+      const samplerA = n('sampler', 340, 0);
+      const samplerB = n('sampler', 340, 140);
+      const mixer = n('mixer', 600, 0);
+      const master = n('master_out', 860, 0, { level: -6 });
+
+      w(seq, 'row1', samplerA, 'trig');
+      w(seq, 'row2', samplerB, 'trig');
+      w(samplerA, 'out', mixer, 'in1');
+      w(samplerB, 'out', mixer, 'in2');
+      w(mixer, 'out', master, 'in');
+    }),
+  },
 ];

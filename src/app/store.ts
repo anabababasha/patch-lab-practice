@@ -5,6 +5,8 @@ import { computeTrace, computeTraceFromWire } from '../graph/trace';
 import type { TraceResult } from '../graph/trace';
 import { engine } from '../audio/engine';
 import { transportService } from '../audio/transportService';
+import { recorderService } from '../audio/recorderService';
+import { looperService } from '../audio/looperService';
 import { micManager } from '../audio/mediaCache';
 
 const STORAGE_KEY = 'patchlab.design.v1';
@@ -245,6 +247,10 @@ interface AppState {
   newDesign(): void;
   insertExample(design: Design, name: string): void;
   setAudioRunning(v: boolean): void;
+  startRecording(nodeId: string): void;
+  stopRecording(nodeId: string): void;
+  looperAction(nodeId: string, sync: boolean): void;
+  looperClear(nodeId: string): void;
 
   transport: { playing: boolean; bpm: number };
   setBpm(v: number): void;
@@ -913,9 +919,71 @@ export const useApp = create<AppState>((set, get) => {
         set((s) => ({ transport: { ...s.transport, playing: false } }));
       }
     },
+    startRecording(nodeId) {
+      const doStart = () => {
+        const ctx = engine.context;
+        const node = get().design.nodes.find(n => n.id === nodeId);
+        const format = node?.params['format'] ?? 0;
+        if (ctx) recorderService.start(ctx, nodeId, get().design.name, format);
+      };
+
+      if (!get().audioRunning) {
+        engine.start(get().design).then(running => {
+          set({ audioRunning: running });
+          if (running) {
+            if (!shownAutoStartToast) {
+              shownAutoStartToast = true;
+              get().showToast('Audio started');
+            }
+            setTimeout(doStart, 50); // let nodes build
+          }
+        });
+      } else {
+        doStart();
+      }
+    },
+
+    stopRecording(nodeId) {
+      const ctx = engine.context;
+      if (ctx) {
+        recorderService.stop(ctx, nodeId);
+      }
+    },
+
+    looperAction(nodeId, sync) {
+      const doAction = () => {
+        const ctx = engine.context;
+        if (ctx) {
+          looperService.action(ctx, nodeId, sync);
+        }
+      };
+
+      if (!get().audioRunning) {
+        engine.start(get().design).then(running => {
+          set({ audioRunning: running });
+          if (running) {
+            if (!shownAutoStartToast) {
+              shownAutoStartToast = true;
+              get().showToast('Audio started');
+            }
+            setTimeout(doAction, 50); // let nodes build
+          }
+        });
+      } else {
+        doAction();
+      }
+    },
+
+    looperClear(nodeId) {
+      const ctx = engine.context;
+      if (ctx) {
+        looperService.clear(ctx, nodeId);
+      }
+    }
   };
 });
 
 // keep the Start Audio pill honest if the OS suspends the context
 engine.onStateChange = (running) => useApp.getState().setAudioRunning(running);
 micManager.onDenied = (msg) => useApp.getState().showToast(msg);
+recorderService.onToast = (msg) => useApp.getState().showToast(msg);

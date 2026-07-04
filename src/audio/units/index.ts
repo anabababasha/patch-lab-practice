@@ -269,6 +269,107 @@ export function createMicIn(ctx: AudioContext): AudioUnit {
   };
 }
 
+export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
+  const level = ctx.createGain();
+  level.gain.value = dbToGain(-6);
+  const an = makeAnalyser(ctx);
+  level.connect(an);
+
+  const pitchScale = ctx.createGain();
+  pitchScale.gain.value = 2400; // default pitchAmt
+
+  let tuneCents = 0;
+  let choke = true;
+  let disposed = false;
+
+  type SamplerVoice = {
+    source: AudioBufferSourceNode;
+    hitGain: GainNode;
+    cleaned: boolean;
+  };
+
+  const activeSet = new Set<SamplerVoice>();
+
+  const cleanupVoice = (voice: SamplerVoice) => {
+    if (voice.cleaned) return;
+    voice.cleaned = true;
+    try { pitchScale.disconnect(voice.source.detune); } catch {}
+    try { voice.source.disconnect(); } catch {}
+    try { voice.hitGain.disconnect(); } catch {}
+    activeSet.delete(voice);
+  };
+
+  const stopActive = () => {
+    const t = ctx.currentTime;
+    const voices = Array.from(activeSet);
+    activeSet.clear();
+
+    for (const voice of voices) {
+      try {
+        voice.hitGain.gain.setTargetAtTime(0, t, 0.003);
+        voice.source.stop(t + 0.01);
+        window.setTimeout(() => cleanupVoice(voice), 50);
+      } catch {
+        cleanupVoice(voice);
+      }
+    }
+  };
+
+  const onTransportStop = () => stopActive();
+  transportService.onTransportStop(onTransportStop);
+
+  const spawn = (time: number) => {
+    if (disposed) return;
+    const entry = mediaCache.get(nodeId);
+    if (!entry) return;
+    
+    if (choke) stopActive();
+    
+    const src = ctx.createBufferSource();
+    src.buffer = entry.buffer;
+    src.detune.value = tuneCents;
+    const hitGain = ctx.createGain();
+    hitGain.gain.value = 1;
+    const voice: SamplerVoice = { source: src, hitGain, cleaned: false };
+    
+    pitchScale.connect(src.detune);
+    src.connect(hitGain);
+    hitGain.connect(level);
+    
+    src.onended = () => cleanupVoice(voice);
+    
+    activeSet.add(voice);
+    src.start(time);
+  };
+
+  return {
+    inputs: { pitch: pitchScale },
+    outputs: { out: an },
+    analysers: { out: an },
+    triggerIns: {
+      trig: (time) => spawn(time ?? ctx.currentTime),
+    },
+    bind(id, v) {
+      if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
+      if (id === 'tune') tuneCents = v * 100;
+      if (id === 'pitchAmt') setNow(pitchScale.gain, v, ctx);
+      if (id === 'choke') choke = v > 0.5;
+    },
+    dispose() {
+      disposed = true;
+      transportService.offTransportStop(onTransportStop);
+      for (const voice of activeSet) {
+        try { voice.source.stop(); } catch {}
+        cleanupVoice(voice);
+      }
+      activeSet.clear();
+      pitchScale.disconnect();
+      level.disconnect();
+      an.disconnect();
+    },
+  };
+}
+
 /* ============================================================= modulation */
 
 export function createLFO(ctx: AudioContext): AudioUnit {
@@ -828,7 +929,87 @@ export function createAnalyzer(ctx: AudioContext): AudioUnit {
   };
 }
 
+export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
+  const input = ctx.createGain();
+  const thruGain = ctx.createGain();
+  const loopGain = ctx.createGain();
+  const an = makeAnalyser(ctx);
+  
+  input.connect(thruGain);
+  thruGain.connect(an);
+  loopGain.connect(an);
+
+  import('../looperService').then((m) => {
+    m.looperService.ensureEntry(ctx, nodeId).then((entry) => {
+      input.connect(entry.tap.node);
+      entry.bus.connect(loopGain);
+    });
+  });
+
+  return {
+    inputs: { in: input },
+    outputs: { out: an },
+    analysers: { out: an },
+    bind(paramId: string, value: number) {
+      if (paramId === 'thruLevel') thruGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
+      if (paramId === 'loopLevel') loopGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
+    },
+    dispose() {
+      import('../looperService').then((m) => {
+        try {
+          const tap = m.looperService.getTap(ctx, nodeId);
+          if (tap) input.disconnect(tap.node);
+          const bus = m.looperService.getPlaybackBus(ctx, nodeId);
+          if (bus) bus.disconnect(loopGain);
+        } catch {}
+      });
+      input.disconnect();
+      thruGain.disconnect();
+      loopGain.disconnect();
+      an.disconnect();
+    }
+  };
+}
+
 /* ================================================================= output */
+
+export function createRecorder(ctx: AudioContext, nodeId: string): AudioUnit {
+  const input = ctx.createGain();
+  const an = makeAnalyser(ctx);
+  input.connect(an);
+
+  import('../captureWorklet').then((cw) => {
+    cw.ensureCaptureWorklet(ctx).then(() => {
+      import('../recorderService').then((m) => {
+        const dest = m.recorderService.getDest(ctx, nodeId);
+        const tap = m.recorderService.getTap(ctx, nodeId);
+        input.connect(dest);
+        input.connect(tap.node);
+      });
+    });
+  });
+
+  return {
+    inputs: { in: input },
+    outputs: { out: an },
+    analysers: { out: an },
+    bind() {},
+    dispose() {
+      import('../recorderService').then((m) => {
+        try {
+          const dest = m.recorderService.getDest(ctx, nodeId);
+          input.disconnect(dest);
+        } catch {}
+        try {
+          const tap = m.recorderService.getTap(ctx, nodeId);
+          input.disconnect(tap.node);
+        } catch {}
+      });
+      input.disconnect(an);
+      an.disconnect();
+    },
+  };
+}
 
 export function createMasterOut(ctx: AudioContext): AudioUnit {
   const level = ctx.createGain();
