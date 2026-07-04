@@ -452,6 +452,26 @@ body {
   background: var(--canvas);
 }
 
+.pl-loopwave {
+  display: block;
+  width: 184px;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas);
+  touch-action: none;
+}
+
+.pl-loopchips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pl-loopchips .pl-mini-btn {
+  flex: 1;
+}
+
 .pl-pad {
   background: var(--surface-raised);
   border: 1px solid var(--border);

@@ -704,6 +704,7 @@ export const registry: Record<string, ComponentSpec> = {
       db('loopLevel', 'Loop', -60, 6, 0),
       db('thruLevel', 'Thru', -60, 6, 0),
       toggle('sync', 'Bar sync', 1),
+      select('speed', 'Speed', ['\u00bd\u00d7', '1\u00d7', '2\u00d7'], 1),
     ],
     internalRouting: { in: ['out'] },
     help: {
@@ -711,6 +712,8 @@ export const registry: Record<string, ComponentSpec> = {
       tips: [
         'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
         'Thru and Loop levels let you fade between live playing and the loop.',
+        'Drag the edges of the waveform to trim the loop - edges snap to zero-crossings so it never clicks.',
+        '\u00bd\u00d7 is an octave down, tape-style.',
       ],
       flows: [
         {

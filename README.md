@@ -54,6 +54,8 @@ PatchLab allows you to capture your performances directly to an audio file. Add 
 
 The **Looper** node allows you to capture a performance through it, loop it instantly, and layer live playing over it. When **Bar sync** is on and the transport is playing, recording actions automatically quantize to the transport grid so your loops lock perfectly in time with the drum machine.
 
+When a loop is captured, the Looper opens a waveform window. Drag either edge to trim the live loop region; synced loops snap to the 16th-note grid first, then to nearby zero-crossings to keep seams clean. The Looper can also Normalize quiet captures, Reverse the buffer, and switch Speed between half-time, normal, and double-time tape-style playback while the loop keeps running.
+
 ## Develop
 
 ```bash

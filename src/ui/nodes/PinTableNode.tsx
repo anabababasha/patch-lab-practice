@@ -21,7 +21,7 @@ function applySeqPreset(nodeId: string, name: string) {
       p[`s${r}_${c}`] = 0;
     }
   }
-  
+
   if (name === 'Clear') {
     setBulk(nodeId, p, { pattern: '' });
   } else {
@@ -39,11 +39,38 @@ function applySeqPreset(nodeId: string, name: string) {
       setBulk(nodeId, p);
     }
   }
-  
+
   // Show toast
   const showToast = useApp.getState().showToast;
   const displayName = name === 'Clear' ? 'Clear' : (patterns.find(pat => pat.name === name || pat.id === name)?.name || name);
   showToast(`${displayName} loaded`);
+}
+
+function getLoopPointerInfo(
+  nodeId: string,
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  pointerType: string,
+) {
+  const region = looperService.getRegion(nodeId);
+  if (!region || region.duration <= 0) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.min(rect.width, Math.max(0, clientX - rect.left));
+  const seconds = (x / rect.width) * region.duration;
+  const startX = (region.start / region.duration) * rect.width;
+  const endX = (region.end / region.duration) * rect.width;
+  const grab = pointerType === 'touch' || pointerType === 'pen' ? 24 : 8;
+  const startDist = Math.abs(x - startX);
+  const endDist = Math.abs(x - endX);
+  const handle =
+    Math.min(startDist, endDist) <= grab
+      ? startDist <= endDist
+        ? 'start'
+        : 'end'
+      : null;
+
+  return { ...region, seconds, handle };
 }
 
 function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
@@ -63,12 +90,78 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     (el: HTMLCanvasElement | null) => scopeService.attachCanvas(id, el),
     [id],
   );
+  const loopWaveRef = useCallback(
+    (el: HTMLCanvasElement | null) => looperService.attachLoopCanvas(id, el),
+    [id],
+  );
   const seqRef = useRef<HTMLDivElement>(null);
   const recTimeRef = useRef<HTMLSpanElement>(null);
   const loopTimeRef = useRef<HTMLSpanElement>(null);
+  const loopDragRef = useRef<{ pointerId: number; handle: 'start' | 'end' } | null>(null);
+  const loopDragLastRef = useRef(0);
 
-  const [recState, setRecState] = React.useState<{state: string, startedAt: number, lastTakeSeconds: number}>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
-  const [loopState, setLoopState] = React.useState<{state: string, startedAt: number}>({ state: 'empty', startedAt: 0 });
+  const [recState, setRecState] = React.useState<{ state: string, startedAt: number, lastTakeSeconds: number }>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
+  const [loopState, setLoopState] = React.useState<{ state: string, startedAt: number, hasLoop: boolean, bufferVersion: number }>({ state: 'empty', startedAt: 0, hasLoop: false, bufferVersion: 0 });
+
+  const applyLoopDrag = useCallback(
+    (canvas: HTMLCanvasElement, clientX: number, pointerType: string, handle: 'start' | 'end') => {
+      const info = getLoopPointerInfo(id, canvas, clientX, pointerType);
+      if (!info) return;
+      looperService.setRegion(
+        id,
+        handle === 'start' ? info.seconds : info.start,
+        handle === 'end' ? info.seconds : info.end,
+      );
+    },
+    [id],
+  );
+
+  const onLoopPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      e.stopPropagation();
+      const info = getLoopPointerInfo(id, e.currentTarget, e.clientX, e.pointerType);
+      if (!info?.handle) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      loopDragRef.current = { pointerId: e.pointerId, handle: info.handle as 'start' | 'end' };
+      loopDragLastRef.current = 0;
+    },
+    [id],
+  );
+
+  const onLoopPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = loopDragRef.current;
+      if (!drag) {
+        const info = getLoopPointerInfo(id, e.currentTarget, e.clientX, e.pointerType);
+        e.currentTarget.style.cursor = info?.handle ? 'ew-resize' : 'default';
+        return;
+      }
+      if (drag.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const now = performance.now();
+      if (now - loopDragLastRef.current < 33) return;
+      loopDragLastRef.current = now;
+      applyLoopDrag(e.currentTarget, e.clientX, e.pointerType, drag.handle);
+    },
+    [applyLoopDrag, id],
+  );
+
+  const onLoopPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = loopDragRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyLoopDrag(e.currentTarget, e.clientX, e.pointerType, drag.handle);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { }
+      loopDragRef.current = null;
+      const info = getLoopPointerInfo(id, e.currentTarget, e.clientX, e.pointerType);
+      e.currentTarget.style.cursor = info?.handle ? 'ew-resize' : 'default';
+    },
+    [applyLoopDrag, id],
+  );
 
   const conn = useConnection();
   const wires = useApp((s) => s.design.wires);
@@ -76,7 +169,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const activeLayerId = useApp((s) => s.ui.activeLayerId);
   const layers = useApp((s) => s.design.layers ?? [{ id: 'main', name: 'Main' }]);
   const firstLayerId = layers[0]?.id ?? 'main';
-  
+
   const fromSpec = React.useMemo(() => {
     if (!conn.inProgress || !conn.fromHandle) return null;
     const fromType = designNodes.find(n => n.id === conn.fromHandle!.nodeId)?.type;
@@ -94,13 +187,13 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   React.useEffect(() => {
     if (spec?.display !== 'sequencer') return;
-    
+
     const onStep = (e: Event) => {
       const ce = e as CustomEvent;
       if (ce.detail.nodeId !== id) return;
       const grid = seqRef.current;
       if (!grid) return;
-      
+
       setTimeout(() => {
         const prev = grid.querySelectorAll('.is-playhead');
         prev.forEach(el => el.classList.remove('is-playhead'));
@@ -173,8 +266,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   React.useEffect(() => {
     if (spec?.display === 'looper') {
-      const unsub = looperService.onState(id, (state, startedAt) => {
-        setLoopState({ state, startedAt });
+      const unsub = looperService.onState(id, (state, startedAt, hasLoop, bufferVersion) => {
+        setLoopState({ state, startedAt, hasLoop, bufferVersion });
       });
       return () => { unsub(); };
     }
@@ -196,12 +289,12 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const crossLayerTargets = React.useMemo(() => {
     const targets = new Map<string, string>();
     if (activeLayerId === 'all') return targets;
-    
+
     const nodeLayers = new Map<string, string>();
     for (const n of designNodes) {
       nodeLayers.set(n.id, n.layerId ?? firstLayerId);
     }
-    
+
     const layerNames = new Map<string, string>();
     for (const l of layers) {
       layerNames.set(l.id, l.name);
@@ -212,7 +305,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         const isOut = w.from.nodeId === id;
         const pinId = isOut ? w.from.pinId : w.to.pinId;
         const otherId = isOut ? w.to.nodeId : w.from.nodeId;
-        
+
         const otherLayerId = nodeLayers.get(otherId);
         if (otherLayerId && otherLayerId !== activeLayerId) {
           targets.set(pinId, layerNames.get(otherLayerId) ?? 'Other Layer');
@@ -262,7 +355,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         const idx = isIn
           ? inPins.indexOf(pin) + 1
           : outPins.indexOf(pin) + 1;
-          
+
         let hintClass = '';
         if (conn.inProgress && fromSpec) {
           const isValidTarget =
@@ -272,7 +365,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
             (!isIn || !takenInputs.has(`${id}:${pin.id}`));
           hintClass = isValidTarget ? 'is-valid-target' : 'is-dim';
         }
-        
+
         const crossLayerName = crossLayerTargets.get(pin.id);
 
         return (
@@ -464,6 +557,41 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
               CLR
             </button>
           </div>
+          {loopState.hasLoop && (
+            <>
+              <canvas
+                ref={loopWaveRef}
+                className="pl-loopwave nodrag"
+                width={368}
+                height={112}
+                aria-label="loop waveform"
+                onPointerDown={onLoopPointerDown}
+                onPointerMove={onLoopPointerMove}
+                onPointerUp={onLoopPointerUp}
+                onPointerCancel={onLoopPointerUp}
+              />
+              <div className="pl-loopchips">
+                <button
+                  className="pl-mini-btn nodrag"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    looperService.normalize(id);
+                  }}
+                >
+                  Normalize
+                </button>
+                <button
+                  className="pl-mini-btn nodrag"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    looperService.reverse(id);
+                  }}
+                >
+                  Reverse
+                </button>
+              </div>
+            </>
+          )}
           <div style={{ fontSize: '10px', color: loopState.state === 'recording' ? 'var(--danger)' : 'var(--text-disabled)', textAlign: 'center', height: '12px' }}>
             {loopState.state === 'empty' && 'empty'}
             {loopState.state === 'recording' && (
@@ -512,7 +640,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
                 {activePattern.pat.name}{activePattern.edited ? ' · edited' : ''}
               </span>
               {activePattern.edited && (
-                <button 
+                <button
                   className="pl-mini-btn nodrag"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -526,7 +654,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
           )}
           <div className="pl-seq-presets">
             {['Maqsum', 'Baladi', 'Saidi', 'Malfuf', "Sama\u02bfi Thaqil", 'Clear'].map(preset => (
-              <button 
+              <button
                 key={preset}
                 className="pl-mini-btn nodrag"
                 onClick={(e) => {
@@ -537,7 +665,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
                 {preset}
               </button>
             ))}
-            <button 
+            <button
               className="pl-mini-btn nodrag"
               onClick={(e) => {
                 e.stopPropagation();

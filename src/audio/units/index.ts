@@ -1,6 +1,9 @@
 import type { AudioUnit } from '../../lib/types';
 import { clamp, dbToGain } from '../../lib/units';
+import { ensureCaptureWorklet } from '../captureWorklet';
+import { looperService } from '../looperService';
 import { mediaCache, micManager } from '../mediaCache';
+import { recorderService } from '../recorderService';
 import { transportService } from '../transportService';
 import { triggerBus } from '../triggerBus';
 
@@ -934,16 +937,17 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
   const thruGain = ctx.createGain();
   const loopGain = ctx.createGain();
   const an = makeAnalyser(ctx);
+  const speeds = [0.5, 1, 2];
+  let disposed = false;
   
   input.connect(thruGain);
   thruGain.connect(an);
   loopGain.connect(an);
 
-  import('../looperService').then((m) => {
-    m.looperService.ensureEntry(ctx, nodeId).then((entry) => {
-      input.connect(entry.tap.node);
-      entry.bus.connect(loopGain);
-    });
+  looperService.ensureEntry(ctx, nodeId).then((entry) => {
+    if (disposed) return;
+    input.connect(entry.tap.node);
+    entry.bus.connect(loopGain);
   });
 
   return {
@@ -953,16 +957,17 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
     bind(paramId: string, value: number) {
       if (paramId === 'thruLevel') thruGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
       if (paramId === 'loopLevel') loopGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
+      if (paramId === 'sync') looperService.setSync(nodeId, value > 0.5);
+      if (paramId === 'speed') looperService.setSpeed(nodeId, speeds[clamp(Math.round(value), 0, speeds.length - 1)]);
     },
     dispose() {
-      import('../looperService').then((m) => {
-        try {
-          const tap = m.looperService.getTap(ctx, nodeId);
-          if (tap) input.disconnect(tap.node);
-          const bus = m.looperService.getPlaybackBus(ctx, nodeId);
-          if (bus) bus.disconnect(loopGain);
-        } catch {}
-      });
+      disposed = true;
+      try {
+        const tap = looperService.getTap(ctx, nodeId);
+        if (tap) input.disconnect(tap.node);
+        const bus = looperService.getPlaybackBus(ctx, nodeId);
+        if (bus) bus.disconnect(loopGain);
+      } catch {}
       input.disconnect();
       thruGain.disconnect();
       loopGain.disconnect();
@@ -976,17 +981,15 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
 export function createRecorder(ctx: AudioContext, nodeId: string): AudioUnit {
   const input = ctx.createGain();
   const an = makeAnalyser(ctx);
+  let disposed = false;
   input.connect(an);
 
-  import('../captureWorklet').then((cw) => {
-    cw.ensureCaptureWorklet(ctx).then(() => {
-      import('../recorderService').then((m) => {
-        const dest = m.recorderService.getDest(ctx, nodeId);
-        const tap = m.recorderService.getTap(ctx, nodeId);
-        input.connect(dest);
-        input.connect(tap.node);
-      });
-    });
+  ensureCaptureWorklet(ctx).then(() => {
+    if (disposed) return;
+    const dest = recorderService.getDest(ctx, nodeId);
+    const tap = recorderService.getTap(ctx, nodeId);
+    input.connect(dest);
+    input.connect(tap.node);
   });
 
   return {
@@ -995,16 +998,15 @@ export function createRecorder(ctx: AudioContext, nodeId: string): AudioUnit {
     analysers: { out: an },
     bind() {},
     dispose() {
-      import('../recorderService').then((m) => {
-        try {
-          const dest = m.recorderService.getDest(ctx, nodeId);
-          input.disconnect(dest);
-        } catch {}
-        try {
-          const tap = m.recorderService.getTap(ctx, nodeId);
-          input.disconnect(tap.node);
-        } catch {}
-      });
+      disposed = true;
+      try {
+        const dest = recorderService.getDest(ctx, nodeId);
+        input.disconnect(dest);
+      } catch {}
+      try {
+        const tap = recorderService.getTap(ctx, nodeId);
+        input.disconnect(tap.node);
+      } catch {}
       input.disconnect(an);
       an.disconnect();
     },
