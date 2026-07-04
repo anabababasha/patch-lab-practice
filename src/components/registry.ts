@@ -396,8 +396,13 @@ export const registry: Record<string, ComponentSpec> = {
     internalRouting: { in: ['out'], mod: ['out'] },
     help: {
       summary: 'Single biquad filter: low-pass, high-pass, band-pass, or notch. Mod input sweeps the cutoff (±2 octaves at 100 %).',
-      tips: ['High Q + band-pass ≈ resonant sweep.', 'Notch is what you\'d reach for to kill a feedback frequency.'],
+      tips: [
+        'High Q + band-pass ≈ resonant sweep.',
+        'Notch is what you\'d reach for to kill a feedback frequency.',
+        "The curve shows the filter's base shape; Mod sweeps move the sound (watch the spectrum) around it.",
+      ],
     },
+    display: 'eq',
     createAudio: createFilter,
   },
 
@@ -439,8 +444,13 @@ export const registry: Record<string, ComponentSpec> = {
     internalRouting: { in: ['out'] },
     help: {
       summary: '4-band parametric EQ: low shelf, two peaking bands, high shelf — the workhorse of system tuning.',
-      tips: ['Cut before you boost.', 'Narrow Q for surgical cuts, wide Q for tone shaping.'],
+      tips: [
+        'Cut before you boost.',
+        'Narrow Q for surgical cuts, wide Q for tone shaping.',
+        'Drag the dots on the curve - x is frequency, y is gain; scroll on a mid dot to narrow or widen it.',
+      ],
     },
+    display: 'eq',
     createAudio: createPEQ,
   },
 

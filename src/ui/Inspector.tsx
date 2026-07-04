@@ -97,7 +97,7 @@ function ParamControl({
         }}
         aria-label={`${spec.label} value`}
       />
-      <span className="pl-param__value">{formatValue(value, spec.unit)}</span>
+      <span className="pl-param__value">{formatValue(value, spec.unit, spec.step)}</span>
     </div>
   );
 }

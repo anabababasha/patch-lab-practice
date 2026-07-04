@@ -2,7 +2,9 @@ import React, { memo, useCallback, useRef, type CSSProperties } from 'react';
 import { Handle, Position, useConnection, type Node, type NodeProps } from '@xyflow/react';
 import { useApp } from '../../app/store';
 import { registry } from '../../components/registry';
-import { pinKey } from '../../lib/types';
+import { pinKey, type ComponentSpec, type NodeInstance, type ParamSpec } from '../../lib/types';
+import { clamp, roundToStep } from '../../lib/units';
+import { eqService } from '../../audio/eqService';
 import { meterService } from '../../audio/meterService';
 import { scopeService, type ScopeMode } from '../../audio/scopeService';
 import { recorderService } from '../../audio/recorderService';
@@ -73,6 +75,84 @@ function getLoopPointerInfo(
   return { ...region, seconds, handle };
 }
 
+type EqBandId = 'ls' | 'b1' | 'b2' | 'hs';
+
+type EqBandControl = {
+  id: EqBandId;
+  freqParam: string;
+  gainParam: string;
+  qParam?: string;
+};
+
+const EQ_BANDS: EqBandControl[] = [
+  { id: 'ls', freqParam: 'lsFreq', gainParam: 'lsGain' },
+  { id: 'b1', freqParam: 'b1Freq', gainParam: 'b1Gain', qParam: 'b1Q' },
+  { id: 'b2', freqParam: 'b2Freq', gainParam: 'b2Gain', qParam: 'b2Q' },
+  { id: 'hs', freqParam: 'hsFreq', gainParam: 'hsGain' },
+];
+
+const EQ_FREQ_MIN = 20;
+const EQ_FREQ_MAX = 20000;
+const EQ_GAIN_MIN = -18;
+const EQ_GAIN_MAX = 18;
+
+const freqToX = (freq: number, width: number) =>
+  (Math.log(freq / EQ_FREQ_MIN) / Math.log(EQ_FREQ_MAX / EQ_FREQ_MIN)) * width;
+
+const xToFreq = (x: number, width: number) =>
+  EQ_FREQ_MIN * Math.pow(EQ_FREQ_MAX / EQ_FREQ_MIN, clamp(x / width, 0, 1));
+
+const gainToY = (gain: number, height: number) =>
+  ((EQ_GAIN_MAX - clamp(gain, EQ_GAIN_MIN, EQ_GAIN_MAX)) / (EQ_GAIN_MAX - EQ_GAIN_MIN)) * height;
+
+const yToGain = (y: number, height: number) =>
+  EQ_GAIN_MAX - clamp(y / height, 0, 1) * (EQ_GAIN_MAX - EQ_GAIN_MIN);
+
+const paramById = (spec: ComponentSpec, paramId: string): ParamSpec | undefined =>
+  spec.params.find((p) => p.id === paramId);
+
+function buildEqBandParams(
+  node: NodeInstance,
+  activeBandId?: EqBandId | null,
+) {
+  if (node.type !== 'peq4') return { bands: [], activeBandId: null };
+  return {
+    activeBandId: activeBandId ?? null,
+    bands: EQ_BANDS.map((band) => ({
+      id: band.id,
+      freq: node.params[band.freqParam] ?? 0,
+      gain: node.params[band.gainParam] ?? 0,
+    })),
+  };
+}
+
+function getEqBandHit(
+  node: NodeInstance,
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number,
+  pointerType: string,
+) {
+  if (node.type !== 'peq4') return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = clamp(clientX - rect.left, 0, rect.width);
+  const y = clamp(clientY - rect.top, 0, rect.height);
+  const grab = pointerType === 'touch' || pointerType === 'pen' ? 24 : 12;
+  let best: { band: EqBandControl; dist: number } | null = null;
+
+  for (const band of EQ_BANDS) {
+    const bx = freqToX(node.params[band.freqParam] ?? 0, rect.width);
+    const by = gainToY(node.params[band.gainParam] ?? 0, rect.height);
+    const dist = Math.hypot(x - bx, y - by);
+    if (dist <= grab && (!best || dist < best.dist)) {
+      best = { band, dist };
+    }
+  }
+
+  return best?.band ?? null;
+}
+
 function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const node = useApp((s) => s.design.nodes.find((n) => n.id === id));
   const selected = useApp((s) => s.ui.selectedNodeIds.includes(id));
@@ -90,6 +170,10 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     (el: HTMLCanvasElement | null) => scopeService.attachCanvas(id, el),
     [id],
   );
+  const eqRef = useCallback(
+    (el: HTMLCanvasElement | null) => eqService.attachCanvas(id, el),
+    [id],
+  );
   const loopWaveRef = useCallback(
     (el: HTMLCanvasElement | null) => looperService.attachLoopCanvas(id, el),
     [id],
@@ -99,9 +183,120 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const loopTimeRef = useRef<HTMLSpanElement>(null);
   const loopDragRef = useRef<{ pointerId: number; handle: 'start' | 'end' } | null>(null);
   const loopDragLastRef = useRef(0);
+  const eqDragRef = useRef<{ pointerId: number; band: EqBandControl } | null>(null);
+  const eqDragLastRef = useRef(0);
 
   const [recState, setRecState] = React.useState<{ state: string, startedAt: number, lastTakeSeconds: number }>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
   const [loopState, setLoopState] = React.useState<{ state: string, startedAt: number, hasLoop: boolean, bufferVersion: number }>({ state: 'empty', startedAt: 0, hasLoop: false, bufferVersion: 0 });
+  const spec = node ? registry[node.type] : undefined;
+
+  const applyEqDrag = useCallback(
+    (canvas: HTMLCanvasElement, clientX: number, clientY: number, band: EqBandControl) => {
+      if (!node || !spec) return;
+      const rect = canvas.getBoundingClientRect();
+      const freqSpec = paramById(spec, band.freqParam);
+      const gainSpec = paramById(spec, band.gainParam);
+      if (!freqSpec || !gainSpec) return;
+
+      const x = clamp(clientX - rect.left, 0, rect.width);
+      const y = clamp(clientY - rect.top, 0, rect.height);
+      const nextFreq = clamp(
+        roundToStep(xToFreq(x, rect.width), freqSpec.step),
+        freqSpec.min,
+        freqSpec.max,
+      );
+      const nextGain = clamp(
+        roundToStep(yToGain(y, rect.height), gainSpec.step),
+        gainSpec.min,
+        gainSpec.max,
+      );
+      const app = useApp.getState();
+      app.setParam(id, band.freqParam, nextFreq);
+      app.setParam(id, band.gainParam, nextGain);
+      eqService.setBandParams(id, {
+        ...buildEqBandParams({
+          ...node,
+          params: {
+            ...node.params,
+            [band.freqParam]: nextFreq,
+            [band.gainParam]: nextGain,
+          },
+        }, band.id),
+      });
+      eqService.markDirty(id);
+    },
+    [id, node, spec],
+  );
+
+  const onEqPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      e.stopPropagation();
+      if (!node || !spec || node.type !== 'peq4') return;
+      const band = getEqBandHit(node, e.currentTarget, e.clientX, e.clientY, e.pointerType);
+      if (!band) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      eqDragRef.current = { pointerId: e.pointerId, band };
+      eqDragLastRef.current = 0;
+      eqService.setBandParams(id, buildEqBandParams(node, band.id));
+    },
+    [id, node, spec],
+  );
+
+  const onEqPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = eqDragRef.current;
+      if (!drag) {
+        const band = node ? getEqBandHit(node, e.currentTarget, e.clientX, e.clientY, e.pointerType) : null;
+        e.currentTarget.style.cursor = band ? 'grab' : 'default';
+        return;
+      }
+      if (drag.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.style.cursor = 'grabbing';
+      const now = performance.now();
+      if (now - eqDragLastRef.current < 33) return;
+      eqDragLastRef.current = now;
+      applyEqDrag(e.currentTarget, e.clientX, e.clientY, drag.band);
+    },
+    [applyEqDrag, node],
+  );
+
+  const onEqPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const drag = eqDragRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      applyEqDrag(e.currentTarget, e.clientX, e.clientY, drag.band);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { }
+      eqDragRef.current = null;
+      if (node) eqService.setBandParams(id, buildEqBandParams(node, null));
+      const band = node ? getEqBandHit(node, e.currentTarget, e.clientX, e.clientY, e.pointerType) : null;
+      e.currentTarget.style.cursor = band ? 'grab' : 'default';
+    },
+    [applyEqDrag, id, node],
+  );
+
+  const onEqWheel = useCallback(
+    (e: React.WheelEvent<HTMLCanvasElement>) => {
+      if (!node || !spec || node.type !== 'peq4') return;
+      const band = getEqBandHit(node, e.currentTarget, e.clientX, e.clientY, 'mouse');
+      if (!band?.qParam) return;
+      const qSpec = paramById(spec, band.qParam);
+      if (!qSpec) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const current = node.params[band.qParam] ?? qSpec.default;
+      const scaled = e.deltaY < 0 ? current * 1.12 : current / 1.12;
+      const next = clamp(roundToStep(scaled, qSpec.step), qSpec.min, qSpec.max);
+      useApp.getState().setParam(id, band.qParam, next);
+      eqService.setBandParams(id, buildEqBandParams(node, band.id));
+      eqService.markDirty(id);
+    },
+    [id, node, spec],
+  );
 
   const applyLoopDrag = useCallback(
     (canvas: HTMLCanvasElement, clientX: number, pointerType: string, handle: 'start' | 'end') => {
@@ -182,8 +377,6 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     for (const w of wires) set.add(`${w.to.nodeId}:${w.to.pinId}`);
     return set;
   }, [conn.inProgress, wires]);
-
-  const spec = node ? registry[node.type] : undefined;
 
   React.useEffect(() => {
     if (spec?.display !== 'sequencer') return;
@@ -321,6 +514,11 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     scopeService.setMode(id, (Math.round(node.params.mode ?? 0) as ScopeMode) || 0);
   }
 
+  if (spec.display === 'eq') {
+    eqService.setBandParams(id, buildEqBandParams(node, eqDragRef.current?.band.id ?? null));
+    eqService.markDirty(id);
+  }
+
   const onPath = trace?.nodes.has(id) ?? false;
   const hue = trace ? hueFor(trace.hueIndex) : undefined;
 
@@ -419,6 +617,21 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
           width={368}
           height={144}
           aria-label="signal display"
+        />
+      )}
+
+      {spec.display === 'eq' && (
+        <canvas
+          ref={eqRef}
+          className="pl-eqcurve nodrag"
+          width={368}
+          height={168}
+          aria-label="EQ response and spectrum"
+          onPointerDown={onEqPointerDown}
+          onPointerMove={onEqPointerMove}
+          onPointerUp={onEqPointerUp}
+          onPointerCancel={onEqPointerUp}
+          onWheel={onEqWheel}
         />
       )}
 

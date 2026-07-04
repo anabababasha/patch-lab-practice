@@ -35,6 +35,8 @@ export interface AudioUnit {
   analysers: Record<string, AnalyserNode>;
   /** optional high-resolution analyser for the Analyzer scope display */
   scope?: AnalyserNode;
+  /** optional filters for EQ curve displays, ordered low to high */
+  eqFilters?: BiquadFilterNode[];
   /** optional event triggers, e.g. envelope fire */
   triggerIns?: Record<string, (time?: number) => void>;
   dispose(): void;
@@ -65,7 +67,7 @@ export interface ComponentSpec {
     }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper';
+  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper' | 'eq';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

@@ -13,7 +13,7 @@ export const formatDb = (v: number) => `${v.toFixed(1)} dB`;
 export const formatHz = (v: number) =>
   v >= 1000 ? `${(v / 1000).toFixed(2)} kHz` : `${Math.round(v)} Hz`;
 
-export const formatValue = (v: number, unit: string) => {
+export const formatValue = (v: number, unit: string, step?: number) => {
   switch (unit) {
     case 'dB':
       return formatDb(v);
@@ -24,7 +24,7 @@ export const formatValue = (v: number, unit: string) => {
     case '%':
       return `${Math.round(v)} %`;
     default:
-      return v.toFixed(0);
+      return step && step < 1 ? v.toFixed(String(step).split('.')[1]?.length ?? 1) : v.toFixed(0);
   }
 };
 

@@ -463,6 +463,7 @@ export function createFilter(ctx: AudioContext): AudioUnit {
     inputs: { in: biquad, mod: modScale },
     outputs: { out: an },
     analysers: { out: an },
+    eqFilters: [biquad],
     bind(id, v) {
       if (id === 'freq') setNow(biquad.frequency, v, ctx);
       if (id === 'q') setNow(biquad.Q, v, ctx);
@@ -502,6 +503,7 @@ export function createPEQ(ctx: AudioContext): AudioUnit {
     inputs: { in: ls },
     outputs: { out: an },
     analysers: { out: an },
+    eqFilters: [ls, p1, p2, hs],
     bind(id, v) {
       switch (id) {
         case 'lsFreq':

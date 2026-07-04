@@ -1,5 +1,6 @@
 import type { AudioUnit, Design } from '../lib/types';
 import { registry } from '../components/registry';
+import { eqService } from './eqService';
 import { meterService } from './meterService';
 import { scopeService } from './scopeService';
 import { mediaCache } from './mediaCache';
@@ -78,6 +79,8 @@ class AudioEngine {
 
     const meters = new Map<string, AnalyserNode>();
     const scopes = new Map<string, AnalyserNode>();
+    const eqFilters = new Map<string, BiquadFilterNode[]>();
+    const eqAnalysers = new Map<string, AnalyserNode>();
 
     for (const n of design.nodes) {
       const spec = registry[n.type];
@@ -88,6 +91,10 @@ class AudioEngine {
       const first = Object.values(unit.analysers)[0];
       if (first) meters.set(n.id, first);
       if (unit.scope) scopes.set(n.id, unit.scope);
+      if (unit.eqFilters) {
+        eqFilters.set(n.id, unit.eqFilters);
+        if (first) eqAnalysers.set(n.id, first);
+      }
     }
 
     this.triggerMap.clear();
@@ -110,6 +117,8 @@ class AudioEngine {
 
     meterService.setAnalysers(meters);
     scopeService.setAnalysers(scopes);
+    eqService.setFilters(eqFilters);
+    eqService.setAnalysers(eqAnalysers);
     
     recorderService.prune(ctx, new Set(design.nodes.map(n => n.id)));
     looperService.prune(ctx, new Set(design.nodes.map(n => n.id)));

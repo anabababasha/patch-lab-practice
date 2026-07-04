@@ -452,6 +452,17 @@ body {
   background: var(--canvas);
 }
 
+.pl-eqcurve {
+  display: block;
+  width: 184px;
+  height: 84px;
+  margin: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas);
+  touch-action: none;
+}
+
 .pl-loopwave {
   display: block;
   width: 184px;
