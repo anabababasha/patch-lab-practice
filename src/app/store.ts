@@ -16,6 +16,7 @@ const uid = (prefix: string) =>
 const emptyDesign = (): Design => ({
   version: 1,
   name: 'Untitled system',
+  layers: [{ id: 'main', name: 'Main' }],
   nodes: [],
   wires: [],
 });
@@ -40,6 +41,28 @@ export function sanitizeDesign(raw: unknown): Design | null {
   const d = raw as Partial<Design>;
   if (d.version !== 1 || !Array.isArray(d.nodes) || !Array.isArray(d.wires))
     return null;
+
+  const layers = Array.isArray(d.layers) && d.layers.length > 0 
+    ? d.layers 
+    : [{ id: 'main', name: 'Main' }];
+  
+  // Dedupe layers
+  const uniqueLayers = [];
+  const seenLayerIds = new Set<string>();
+  for (const l of layers) {
+    if (l && typeof l === 'object' && l.id && typeof l.id === 'string' && l.name && typeof l.name === 'string') {
+      if (!seenLayerIds.has(l.id)) {
+        seenLayerIds.add(l.id);
+        uniqueLayers.push(l);
+      }
+    }
+  }
+  if (uniqueLayers.length === 0) {
+    uniqueLayers.push({ id: 'main', name: 'Main' });
+    seenLayerIds.add('main');
+  }
+  
+  const firstLayerId = uniqueLayers[0].id;
 
   const nodes: NodeInstance[] = [];
   for (const n of d.nodes) {
@@ -83,6 +106,7 @@ export function sanitizeDesign(raw: unknown): Design | null {
       y: typeof src.y === 'number' ? src.y : 0,
       params,
       ...(meta ? { meta } : {}),
+      layerId: typeof src.layerId === 'string' && seenLayerIds.has(src.layerId) ? src.layerId : firstLayerId,
     });
   }
 
@@ -137,6 +161,7 @@ export function sanitizeDesign(raw: unknown): Design | null {
   return {
     version: 1,
     name: typeof d.name === 'string' ? d.name : 'Untitled system',
+    layers: uniqueLayers,
     nodes,
     wires,
   };
@@ -167,6 +192,7 @@ interface UiState {
   rejections: string[];
   panelOpen: boolean;
   panelTab: 'info' | 'check' | 'patterns';
+  activeLayerId: string;
 }
 
 interface AppState {
@@ -188,6 +214,12 @@ interface AppState {
   setNodeMeta(nodeId: string, key: string, value: string): void;
   loadMediaFile(nodeId: string, file: File): Promise<void>;
   fireTrigger(nodeId: string, pinId: string): void;
+  
+  addLayer(): void;
+  renameLayer(id: string, name: string): void;
+  deleteLayer(id: string): void;
+  setActiveLayer(id: string): void;
+  moveNodesToLayer(nodeIds: string[], layerId: string): void;
 
   setSelectedNodes(ids: string[]): void;
   addToSelection(id: string): void;
@@ -270,6 +302,7 @@ export const useApp = create<AppState>((set, get) => {
       rejections: [],
       panelOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
       panelTab: 'info',
+      activeLayerId: 'all',
     },
     audioRunning: false,
     canUndo: false,
@@ -293,6 +326,7 @@ export const useApp = create<AppState>((set, get) => {
         x: Math.round(x),
         y: Math.round(y),
         params,
+        layerId: get().ui.activeLayerId === 'all' ? (get().design.layers?.[0]?.id ?? 'main') : get().ui.activeLayerId,
       };
       commitStructural({ ...d, nodes: [...d.nodes, node] });
       set((s) => ({
@@ -614,6 +648,84 @@ export const useApp = create<AppState>((set, get) => {
         },
       }));
     },
+    
+    addLayer() {
+      const d = get().design;
+      const layers = d.layers ?? [{ id: 'main', name: 'Main' }];
+      let num = layers.length + 1;
+      let name = `Layer ${num}`;
+      while (layers.some(l => l.name === name)) {
+        num++;
+        name = `Layer ${num}`;
+      }
+      const newLayer = { id: uid('layer'), name };
+      snapshot(d);
+      const nextDesign = { ...d, layers: [...layers, newLayer] };
+      commitStructural(nextDesign);
+      set(s => ({ ui: { ...s.ui, activeLayerId: newLayer.id } }));
+    },
+    
+    renameLayer(id, name) {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const d = get().design;
+      const layers = d.layers ?? [{ id: 'main', name: 'Main' }];
+      if (!layers.some(l => l.id === id)) return;
+      
+      const now = Date.now();
+      const key = `layer_rename:${id}`;
+      if (lastParamStamp.key !== key || now - lastParamStamp.time > 800) {
+        snapshot(d);
+      }
+      lastParamStamp = { key, time: now };
+      
+      const nextDesign = {
+        ...d,
+        layers: layers.map(l => l.id === id ? { ...l, name: trimmed } : l)
+      };
+      set({ design: nextDesign });
+      saveSoon(nextDesign);
+    },
+    
+    deleteLayer(id) {
+      const d = get().design;
+      const layers = d.layers ?? [{ id: 'main', name: 'Main' }];
+      if (layers.length <= 1) {
+        get().showToast("A design needs at least one layer.");
+        return;
+      }
+      const layerIndex = layers.findIndex(l => l.id === id);
+      if (layerIndex === -1) return;
+      
+      snapshot(d);
+      const remainingLayers = layers.filter(l => l.id !== id);
+      const targetLayerId = remainingLayers[0].id;
+      
+      const nextNodes = d.nodes.map(n => n.layerId === id ? { ...n, layerId: targetLayerId } : n);
+      const nextDesign = { ...d, layers: remainingLayers, nodes: nextNodes };
+      
+      commitStructural(nextDesign);
+      
+      if (get().ui.activeLayerId === id) {
+        set(s => ({ ui: { ...s.ui, activeLayerId: 'all' } }));
+      }
+    },
+    
+    setActiveLayer(id) {
+      set(s => ({ ui: { ...s.ui, activeLayerId: id } }));
+    },
+    
+    moveNodesToLayer(nodeIds, layerId) {
+      const d = get().design;
+      const layers = d.layers ?? [{ id: 'main', name: 'Main' }];
+      if (!layers.some(l => l.id === layerId)) return;
+      
+      snapshot(d);
+      const idSet = new Set(nodeIds);
+      const nextNodes = d.nodes.map(n => idSet.has(n.id) ? { ...n, layerId } : n);
+      commitStructural({ ...d, nodes: nextNodes });
+    },
+
     setPanelOpen(open) {
       set((s) => ({ ui: { ...s.ui, panelOpen: open } }));
     },
@@ -744,7 +856,8 @@ export const useApp = create<AppState>((set, get) => {
         return {
           ...n,
           x: n.x + offsetX,
-          label
+          label,
+          layerId: get().ui.activeLayerId === 'all' ? (get().design.layers?.[0]?.id ?? 'main') : get().ui.activeLayerId,
         };
       });
 

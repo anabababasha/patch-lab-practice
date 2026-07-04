@@ -105,8 +105,10 @@ function ParamControl({
 export function Inspector() {
   const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
   const nodes = useApp((s) => s.design.nodes);
+  const layers = useApp((s) => s.design.layers ?? [{ id: 'main', name: 'Main' }]);
   const removeNodes = useApp((s) => s.removeNodes);
   const removeNode = useApp((s) => s.removeNode);
+  const moveNodesToLayer = useApp((s) => s.moveNodesToLayer);
 
   if (selectedNodeIds.length === 0) return null;
 
@@ -115,6 +117,17 @@ export function Inspector() {
       <section className="pl-inspector" aria-label="Inspector">
         <div className="pl-inspector__head">
           <span className="pl-inspector__title">{selectedNodeIds.length} components selected</span>
+          <select 
+            className="pl-param__number" 
+            style={{ width: 'auto', flex: 1, minWidth: '100px' }}
+            value=""
+            onChange={(e) => {
+              if (e.target.value) moveNodesToLayer(selectedNodeIds, e.target.value);
+            }}
+          >
+            <option value="" disabled>Move to layer…</option>
+            {layers.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
           <button
             className="pl-btn pl-btn--danger"
             onClick={() => removeNodes(selectedNodeIds)}
@@ -146,6 +159,21 @@ export function Inspector() {
         </button>
       </div>
       <div className="pl-inspector__params">
+        <div className="pl-param">
+          <span className="pl-param__label">Layer</span>
+          <select
+            className="pl-param__number"
+            style={{ width: 'auto', flex: 1 }}
+            value={node.layerId ?? layers[0]?.id ?? 'main'}
+            onChange={(e) => moveNodesToLayer([node.id], e.target.value)}
+          >
+            {layers.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
         {spec.params.filter(p => !p.hidden).map((p) => (
           <ParamControl
             key={p.id}

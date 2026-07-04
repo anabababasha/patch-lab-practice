@@ -39,10 +39,19 @@ export function FlowCanvas() {
   const nodeCacheRef = useRef(new Map<string, PinTableNodeType>());
   const measuredRef = useRef(new Map<string, { width: number; height: number }>());
 
+  const activeLayerId = useApp((s) => s.ui.activeLayerId);
+  const layers = useApp((s) => s.design.layers ?? [{ id: 'main', name: 'Main' }]);
+  const firstLayerId = layers[0].id;
+
+  const visibleNodes = useMemo(() => {
+    if (activeLayerId === 'all') return design.nodes;
+    return design.nodes.filter(n => (n.layerId ?? firstLayerId) === activeLayerId);
+  }, [design.nodes, activeLayerId, firstLayerId]);
+
   const nodes: PinTableNodeType[] = useMemo(() => {
     const cache = nodeCacheRef.current;
     const ids = new Set<string>();
-    const next = design.nodes.map((n) => {
+    const next = visibleNodes.map((n) => {
       ids.add(n.id);
       const selected = selectedNodeIds.includes(n.id);
       const measured = measuredRef.current.get(n.id);
@@ -72,21 +81,25 @@ export function FlowCanvas() {
     for (const id of measuredRef.current.keys())
       if (!ids.has(id)) measuredRef.current.delete(id);
     return next;
-  }, [design.nodes, selectedNodeIds]);
+  }, [visibleNodes, selectedNodeIds]);
 
   const edges: SignalEdgeType[] = useMemo(
-    () =>
-      design.wires.map((w) => ({
-        id: w.id,
-        type: 'signal' as const,
-        source: w.from.nodeId,
-        sourceHandle: w.from.pinId,
-        target: w.to.nodeId,
-        targetHandle: w.to.pinId,
-        data: { colorIndex: w.colorIndex, kind: w.kind ?? 'audio' },
-        selected: w.id === selectedWireId,
-      })),
-    [design.wires, selectedWireId],
+    () => {
+      const visibleIds = new Set(visibleNodes.map(n => n.id));
+      return design.wires
+        .filter(w => visibleIds.has(w.from.nodeId) && visibleIds.has(w.to.nodeId))
+        .map((w) => ({
+          id: w.id,
+          type: 'signal' as const,
+          source: w.from.nodeId,
+          sourceHandle: w.from.pinId,
+          target: w.to.nodeId,
+          targetHandle: w.to.pinId,
+          data: { colorIndex: w.colorIndex, kind: w.kind ?? 'audio' },
+          selected: w.id === selectedWireId,
+        }));
+    },
+    [design.wires, selectedWireId, visibleNodes],
   );
 
   const onNodesChange = useCallback((changes: NodeChange<PinTableNodeType>[]) => {
@@ -159,7 +172,13 @@ export function FlowCanvas() {
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        s.selectAll();
+        const activeLayerId = s.ui.activeLayerId;
+        const layers = s.design.layers ?? [{ id: 'main', name: 'Main' }];
+        const firstLayerId = layers[0].id;
+        const visibleIds = s.design.nodes
+          .filter(n => activeLayerId === 'all' || (n.layerId ?? firstLayerId) === activeLayerId)
+          .map(n => n.id);
+        s.setSelectedNodes(visibleIds);
         return;
       }
       if (e.key === 'Escape') {

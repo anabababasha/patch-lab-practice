@@ -66,6 +66,9 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const conn = useConnection();
   const wires = useApp((s) => s.design.wires);
   const designNodes = useApp((s) => s.design.nodes);
+  const activeLayerId = useApp((s) => s.ui.activeLayerId);
+  const layers = useApp((s) => s.design.layers ?? [{ id: 'main', name: 'Main' }]);
+  const firstLayerId = layers[0]?.id ?? 'main';
   
   const fromSpec = React.useMemo(() => {
     if (!conn.inProgress || !conn.fromHandle) return null;
@@ -80,13 +83,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     return set;
   }, [conn.inProgress, wires]);
 
-  if (!node) return null;
-  const spec = registry[node.type];
-  if (!spec) return null;
-
-  if (spec.display === 'scope') {
-    scopeService.setMode(id, (Math.round(node.params.mode ?? 0) as ScopeMode) || 0);
-  }
+  const spec = node ? registry[node.type] : undefined;
 
   React.useEffect(() => {
     if (spec?.display !== 'sequencer') return;
@@ -122,14 +119,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     };
   }, [id, spec?.display]);
 
-  const onPath = trace?.nodes.has(id) ?? false;
-  const hue = trace ? hueFor(trace.hueIndex) : undefined;
-
-  const inPins = spec.pins.filter((p) => p.direction === 'in');
-  const outPins = spec.pins.filter((p) => p.direction === 'out');
-
   const activePattern = React.useMemo(() => {
-    if (spec.display !== 'sequencer' || !node.meta?.pattern) return null;
+    if (!node || !spec || spec.display !== 'sequencer' || !node.meta?.pattern) return null;
     const pat = patterns.find(p => p.id === node.meta?.pattern);
     if (!pat) return null;
     let edited = false;
@@ -149,7 +140,48 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
       }
     }
     return { pat, edited };
-  }, [spec.display, node.meta?.pattern, node.params]);
+  }, [spec?.display, node?.meta?.pattern, node?.params]);
+
+  const crossLayerTargets = React.useMemo(() => {
+    const targets = new Map<string, string>();
+    if (activeLayerId === 'all') return targets;
+    
+    const nodeLayers = new Map<string, string>();
+    for (const n of designNodes) {
+      nodeLayers.set(n.id, n.layerId ?? firstLayerId);
+    }
+    
+    const layerNames = new Map<string, string>();
+    for (const l of layers) {
+      layerNames.set(l.id, l.name);
+    }
+
+    for (const w of wires) {
+      if (w.from.nodeId === id || w.to.nodeId === id) {
+        const isOut = w.from.nodeId === id;
+        const pinId = isOut ? w.from.pinId : w.to.pinId;
+        const otherId = isOut ? w.to.nodeId : w.from.nodeId;
+        
+        const otherLayerId = nodeLayers.get(otherId);
+        if (otherLayerId && otherLayerId !== activeLayerId) {
+          targets.set(pinId, layerNames.get(otherLayerId) ?? 'Other Layer');
+        }
+      }
+    }
+    return targets;
+  }, [wires, designNodes, activeLayerId, layers, firstLayerId, id]);
+
+  if (!node || !spec) return null;
+
+  if (spec.display === 'scope') {
+    scopeService.setMode(id, (Math.round(node.params.mode ?? 0) as ScopeMode) || 0);
+  }
+
+  const onPath = trace?.nodes.has(id) ?? false;
+  const hue = trace ? hueFor(trace.hueIndex) : undefined;
+
+  const inPins = spec.pins.filter((p) => p.direction === 'in');
+  const outPins = spec.pins.filter((p) => p.direction === 'out');
 
   return (
     <div
@@ -189,6 +221,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
             (!isIn || !takenInputs.has(`${id}:${pin.id}`));
           hintClass = isValidTarget ? 'is-valid-target' : 'is-dim';
         }
+        
+        const crossLayerName = crossLayerTargets.get(pin.id);
 
         return (
           <div
@@ -214,11 +248,13 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
                 traced ? 'is-traced' : '',
                 isControl ? 'is-control' : '',
                 isTrigger ? 'is-trigger' : '',
+                crossLayerName ? 'is-crosslayer' : '',
                 hintClass,
               ].join(' ')}
               style={
                 { '--pl-pin-hue': traced ? hue : undefined } as CSSProperties
               }
+              title={crossLayerName ? `→ ${crossLayerName}` : undefined}
               onMouseEnter={() =>
                 hoverTracePin({ nodeId: id, pinId: pin.id })
               }

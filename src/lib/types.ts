@@ -78,6 +78,7 @@ export interface NodeInstance {
   params: Record<string, number>;
   /** small string metadata (e.g. loaded file name) — optional, additive */
   meta?: Record<string, string>;
+  layerId?: string;
 }
 
 export interface PinRef {
@@ -93,9 +94,15 @@ export interface Wire {
   kind?: SignalKind; // 'audio' (default) | 'control' -> dashed rendering
 }
 
+export interface Layer {
+  id: string;
+  name: string;
+}
+
 export interface Design {
   version: 1;
   name: string;
+  layers?: Layer[];
   nodes: NodeInstance[];
   wires: Wire[];
 }

@@ -38,6 +38,12 @@ The sequencer includes a robust rhythm pattern library spanning six traditions: 
 ### Verifying patterns
 Patterns live in `src/patterns/index.ts` as plain data; each carries `status` and `source`; the path from draft → verified is (1) cross-check against a citable source or authoritative recording, (2) listening review at tradition-appropriate tempo, (3) set `status: 'verified'` and cite the source in the same commit. Corrections are ordinary code commits — the library's git history IS its provenance record.
 
+## Layers
+
+Build 5a introduces **Layers**, allowing you to organize complex designs into named, Q-SYS-style schematic view pages.
+- **View-only organization**: Layers are purely visual. The audio engine, trace algorithm, and wires are always global. The design will sound identical regardless of which layer is actively visible.
+- **Cross-layer signals**: When viewing a single layer, pins that wire to components on other hidden layers show a purple outer ring and indicate their destination on hover.
+
 ## Develop
 
 ```bash

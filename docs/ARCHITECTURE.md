@@ -211,3 +211,10 @@ Build 4 introduces a sample-accurate lookahead scheduler (the `transportService`
 - Sequencers emit triggers using the exact audio clock time (e.g., `time` parameter in `triggerBus.emit`).
 - The `time` is passed through the engine and into the receiving envelope's `fire(time?)` method, ensuring machine-steady audio hits, completely immune to main-thread UI jitter.
 - The UI layer (e.g., the playhead cursor) is synced using a computed `delayMs = (time - ctx.currentTime) * 1000` via a `setTimeout` to match what is *heard*.
+
+## 10. Layers
+
+Layers (introduced in Build 5a) are a **view-only** organization tool, akin to schematic pages in Q-SYS.
+- **CRITICAL INVARIANT**: The audio engine, trace algorithm, validation, and wire storage remain completely global and layer-unaware. A design sounds and behaves identically regardless of which layer is actively being viewed.
+- In the UI, nodes belong to exactly one layer. Wires are visible only when both endpoint nodes are visible.
+- When a visible node has a wire extending to a hidden node on another layer, its pin handle receives a purple indicator (`is-crosslayer`) and a tooltip indicating the destination layer name, preserving the ability to trace signals across schematic pages.
