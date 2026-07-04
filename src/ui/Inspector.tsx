@@ -146,7 +146,7 @@ export function Inspector() {
         </button>
       </div>
       <div className="pl-inspector__params">
-        {spec.params.map((p) => (
+        {spec.params.filter(p => !p.hidden).map((p) => (
           <ParamControl
             key={p.id}
             nodeId={node.id}

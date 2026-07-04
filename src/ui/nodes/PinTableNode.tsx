@@ -9,6 +9,41 @@ import { HEADER_H, ROW_H, hueFor } from '../constants';
 
 export type PinTableNodeType = Node<{ pl: true }, 'pinTable'>;
 
+function applySeqPreset(nodeId: string, name: string) {
+  const setBulk = useApp.getState().setParamsBulk;
+  const p: Record<string, number> = {};
+  for (let r = 1; r <= 4; r++) {
+    for (let c = 1; c <= 16; c++) {
+      p[`s${r}_${c}`] = 0;
+    }
+  }
+  
+  if (name === 'Maqsum') {
+    p.steps = 8;
+    [1,0,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+    [0,1,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  } else if (name === 'Baladi') {
+    p.steps = 8;
+    [1,1,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+    [0,0,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  } else if (name === 'Saidi') {
+    p.steps = 8;
+    [1,0,0,1,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+    [0,1,0,0,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  } else if (name === 'Malfuf') {
+    p.steps = 8;
+    [1,0,0,0,0,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+    [0,0,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  } else if (name === "Sama'i") {
+    p.steps = 10;
+    [1,0,0,0,0,1,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+    [0,0,0,1,0,0,0,1,0,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+  }
+  // Clear keeps steps unchanged
+  
+  setBulk(nodeId, p);
+}
+
 function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const node = useApp((s) => s.design.nodes.find((n) => n.id === id));
   const selected = useApp((s) => s.ui.selectedNodeIds.includes(id));
@@ -26,6 +61,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     (el: HTMLCanvasElement | null) => scopeService.attachCanvas(id, el),
     [id],
   );
+  const seqRef = useRef<HTMLDivElement>(null);
 
   const conn = useConnection();
   const wires = useApp((s) => s.design.wires);
@@ -52,6 +88,40 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     scopeService.setMode(id, (Math.round(node.params.mode ?? 0) as ScopeMode) || 0);
   }
 
+  React.useEffect(() => {
+    if (spec?.display !== 'sequencer') return;
+    
+    const onStep = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail.nodeId !== id) return;
+      const grid = seqRef.current;
+      if (!grid) return;
+      
+      setTimeout(() => {
+        const prev = grid.querySelectorAll('.is-playhead');
+        prev.forEach(el => el.classList.remove('is-playhead'));
+        const cells = grid.querySelectorAll(`[data-col="${ce.detail.step}"]`);
+        cells.forEach(el => el.classList.add('is-playhead'));
+      }, ce.detail.delayMs);
+    };
+
+    const onStop = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (ce.detail.nodeId !== id) return;
+      const grid = seqRef.current;
+      if (!grid) return;
+      const prev = grid.querySelectorAll('.is-playhead');
+      prev.forEach(el => el.classList.remove('is-playhead'));
+    };
+
+    window.addEventListener('pl-seq-step', onStep);
+    window.addEventListener('pl-seq-stop', onStop);
+    return () => {
+      window.removeEventListener('pl-seq-step', onStep);
+      window.removeEventListener('pl-seq-stop', onStop);
+    };
+  }, [id, spec?.display]);
+
   const onPath = trace?.nodes.has(id) ?? false;
   const hue = trace ? hueFor(trace.hueIndex) : undefined;
 
@@ -62,6 +132,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     <div
       className={[
         'pl-node',
+        spec.display === 'sequencer' ? 'is-seq' : '',
         selected ? 'is-selected' : '',
         onPath ? 'on-path' : '',
       ].join(' ')}
@@ -196,6 +267,54 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
           >
             TRIG
           </button>
+        </div>
+      )}
+
+      {spec.display === 'sequencer' && (
+        <div className="pl-seq-block" ref={seqRef}>
+          <div className="pl-seq-grid">
+            {['D', 'T', 'K', 'G'].map((rowLabel, r) => (
+              <div key={r} className="pl-seq-row">
+                <span className="pl-seq-row-label">{rowLabel}</span>
+                {Array.from({ length: 16 }).map((_, c) => {
+                  const paramId = `s${r + 1}_${c + 1}`;
+                  const on = (node.params[paramId] || 0) > 0.5;
+                  const active = c < (node.params.steps || 16);
+                  return (
+                    <button
+                      key={c}
+                      data-col={c}
+                      className={[
+                        'pl-seq-cell',
+                        'nodrag',
+                        on ? 'is-on' : '',
+                        !active ? 'is-inactive' : '',
+                        c % 4 === 0 ? 'is-beat' : ''
+                      ].join(' ')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        useApp.getState().setParam(id, paramId, on ? 0 : 1);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="pl-seq-presets">
+            {['Maqsum', 'Baladi', 'Saidi', 'Malfuf', "Sama'i", 'Clear'].map(preset => (
+              <button 
+                key={preset}
+                className="pl-mini-btn nodrag"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  applySeqPreset(id, preset);
+                }}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

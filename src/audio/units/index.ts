@@ -1,6 +1,8 @@
 import type { AudioUnit } from '../../lib/types';
 import { clamp, dbToGain } from '../../lib/units';
 import { mediaCache, micManager } from '../mediaCache';
+import { transportService } from '../transportService';
+import { triggerBus } from '../triggerBus';
 
 const SMOOTH = 0.01; // 10 ms setTargetAtTime — click-free param moves
 
@@ -463,6 +465,64 @@ export function createCompressor(ctx: AudioContext): AudioUnit {
   };
 }
 
+export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUnit {
+  const pattern = Array.from({ length: 4 }, () => new Array(16).fill(0));
+  let steps = 16;
+  let rateDiv = 2; // 1/8 default
+  let pos = 0;
+
+  const onTick = (time: number, tickIndex: number) => {
+    if (tickIndex % rateDiv !== 0) return;
+    const step = pos;
+    pos = (pos + 1) % steps;
+    
+    for (let row = 0; row < 4; row++) {
+      if (pattern[row][step] === 1) {
+        triggerBus.emit(nodeId, `row${row + 1}`, time);
+      }
+    }
+    
+    const delayMs = Math.max(0, (time - ctx.currentTime) * 1000);
+    const event = new CustomEvent('pl-seq-step', { 
+      detail: { nodeId, step, delayMs } 
+    });
+    window.dispatchEvent(event);
+  };
+  
+  const onStop = () => {
+    pos = 0;
+    window.dispatchEvent(new CustomEvent('pl-seq-stop', { detail: { nodeId } }));
+  };
+
+  transportService.registerSequencer(nodeId, onTick);
+  transportService.onTransportStop(onStop);
+
+  return {
+    inputs: {},
+    outputs: {},
+    analysers: {},
+    triggerIns: {},
+    bind(id, v) {
+      if (id === 'steps') steps = Math.max(1, Math.min(16, Math.round(v)));
+      else if (id === 'rate') rateDiv = Math.round(v) === 0 ? 2 : 1;
+      else if (id.startsWith('s')) {
+        const m = id.match(/s(\d)_(\d+)/);
+        if (m) {
+          const row = parseInt(m[1], 10) - 1;
+          const col = parseInt(m[2], 10) - 1;
+          if (row >= 0 && row < 4 && col >= 0 && col < 16) {
+            pattern[row][col] = v;
+          }
+        }
+      }
+    },
+    dispose() {
+      transportService.unregister(nodeId);
+      transportService.offTransportStop(onStop);
+    },
+  };
+}
+
 export function createDelay(ctx: AudioContext): AudioUnit {
   const input = ctx.createGain();
   const dry = ctx.createGain();
@@ -826,8 +886,8 @@ export function createEnvelope(ctx: AudioContext): AudioUnit {
   let decayS = 0.2;
   let exponential = true;
 
-  const fire = () => {
-    const t = ctx.currentTime;
+  const fire = (time?: number) => {
+    const t = time ?? ctx.currentTime;
     const g = env.gain;
     g.cancelScheduledValues(t);
     g.setValueAtTime(g.value, t); // retrigger-safe: start ramp from CURRENT value, not stale target

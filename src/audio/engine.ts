@@ -3,6 +3,8 @@ import { registry } from '../components/registry';
 import { meterService } from './meterService';
 import { scopeService } from './scopeService';
 import { mediaCache } from './mediaCache';
+import { transportService } from './transportService';
+import { triggerBus } from './triggerBus';
 
 /**
  * Compile strategy: correctness over cleverness.
@@ -12,10 +14,14 @@ import { mediaCache } from './mediaCache';
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private units = new Map<string, AudioUnit>();
-  private triggerMap = new Map<string, Array<() => void>>();
+  private triggerMap = new Map<string, Array<(time?: number) => void>>();
   private timer: number | undefined;
   private lastDesign: Design | null = null;
   onStateChange: ((running: boolean) => void) | null = null;
+
+  constructor() {
+    triggerBus.emit = (n, p, t) => this.emitTrigger(n, p, t);
+  }
 
   get context() {
     return this.ctx;
@@ -27,6 +33,7 @@ class AudioEngine {
       this.ctx.addEventListener('statechange', () => {
         this.onStateChange?.(this.ctx?.state === 'running');
       });
+      transportService.attach(this.ctx);
     }
     return this.ctx;
   }
@@ -108,10 +115,10 @@ class AudioEngine {
     this.units.get(nodeId)?.bind(paramId, value);
   }
 
-  emitTrigger(nodeId: string, pinId: string) {
+  emitTrigger(nodeId: string, pinId: string, time?: number) {
     const handlers = this.triggerMap.get(`${nodeId}:${pinId}`);
     if (handlers) {
-      for (const h of handlers) h();
+      for (const h of handlers) h(time);
     }
   }
 

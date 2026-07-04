@@ -202,3 +202,12 @@ src/
 - **Full rebuild on structure change** accepted for Phase 1; revisit only if designs exceed ~60 nodes.
 - **AudioWorklet avoided** in Build 1 (pink noise via buffer). Worklets enter with the Router/metering upgrades if needed.
 - **Trademark**: UI says "inspired by professional DSP designers"; no QSC marks or copied iconography.
+
+## 9. Transport & scheduling
+
+Build 4 introduces a sample-accurate lookahead scheduler (the `transportService`), implementing Chris Wilson's "A Tale of Two Clocks" pattern.
+- A `setInterval` (~25ms) wakes up and discovers upcoming transport ticks falling within the next 120ms.
+- Ticks are scheduled against `ctx.currentTime` and dispatched to registered sequencers.
+- Sequencers emit triggers using the exact audio clock time (e.g., `time` parameter in `triggerBus.emit`).
+- The `time` is passed through the engine and into the receiving envelope's `fire(time?)` method, ensuring machine-steady audio hits, completely immune to main-thread UI jitter.
+- The UI layer (e.g., the playhead cursor) is synced using a computed `delayMs = (time - ctx.currentTime) * 1000` via a `setTimeout` to match what is *heard*.

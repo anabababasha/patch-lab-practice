@@ -4,6 +4,7 @@ import { registry, typeAliases } from '../components/registry';
 import { computeTrace, computeTraceFromWire } from '../graph/trace';
 import type { TraceResult } from '../graph/trace';
 import { engine } from '../audio/engine';
+import { transportService } from '../audio/transportService';
 import { micManager } from '../audio/mediaCache';
 
 const STORAGE_KEY = 'patchlab.design.v1';
@@ -157,6 +158,7 @@ interface AppState {
   addWire(a: PinRef, b: PinRef): void;
   removeWire(id: string): void;
   setParam(nodeId: string, paramId: string, value: number): void;
+  setParamsBulk(nodeId: string, values: Record<string, number>): void;
   setName(name: string): void;
   setNodeMeta(nodeId: string, key: string, value: string): void;
   loadMediaFile(nodeId: string, file: File): Promise<void>;
@@ -185,6 +187,10 @@ interface AppState {
   newDesign(): void;
   insertExample(design: Design, name: string): void;
   setAudioRunning(v: boolean): void;
+
+  transport: { playing: boolean; bpm: number };
+  setBpm(v: number): void;
+  toggleTransport(): void;
 }
 
 let history: Design[] = [];
@@ -241,6 +247,7 @@ export const useApp = create<AppState>((set, get) => {
     audioRunning: false,
     canUndo: false,
     canRedo: false,
+    transport: { playing: false, bpm: 100 },
 
     /* -------------------------------------------------------- nodes */
 
@@ -436,6 +443,27 @@ export const useApp = create<AppState>((set, get) => {
       saveSoon(design);
       engine.setParam(nodeId, paramId, value); // live, no rebuild
       retrace(); // dynamic routing (Router) can change the traced path
+    },
+
+    setParamsBulk(nodeId, values) {
+      const s = get();
+      const node = s.design.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+
+      snapshot(s.design);
+
+      const nextNodes = s.design.nodes.map((n) => {
+        if (n.id !== nodeId) return n;
+        return { ...n, params: { ...n.params, ...values } };
+      });
+
+      const nextDesign = { ...s.design, nodes: nextNodes };
+      set({ design: nextDesign });
+      saveSoon(nextDesign);
+
+      for (const [k, v] of Object.entries(values)) {
+        engine.setParam(nodeId, k, v);
+      }
     },
 
     setNodeMeta(nodeId, key, value) {
@@ -712,6 +740,31 @@ export const useApp = create<AppState>((set, get) => {
 
     setAudioRunning(v) {
       set({ audioRunning: v });
+    },
+
+    setBpm(v) {
+      const clamped = Math.max(40, Math.min(240, v));
+      transportService.setBpm(clamped);
+      set((s) => ({ transport: { ...s.transport, bpm: clamped } }));
+    },
+
+    async toggleTransport() {
+      const s = get();
+      if (!s.transport.playing) {
+        if (!s.audioRunning) {
+          await engine.start(s.design);
+          get().setAudioRunning(true);
+          if (!shownAutoStartToast) {
+            shownAutoStartToast = true;
+            get().showToast('Audio started');
+          }
+        }
+        transportService.start();
+        set((s) => ({ transport: { ...s.transport, playing: true } }));
+      } else {
+        transportService.stop();
+        set((s) => ({ transport: { ...s.transport, playing: false } }));
+      }
     },
   };
 });

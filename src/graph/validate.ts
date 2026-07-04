@@ -63,6 +63,20 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
       }
     }
 
+    if (node.type === 'step_seq') {
+      const hasAnyWire = ['row1', 'row2', 'row3', 'row4'].some(
+        (pinId) => (outWires.get(`${node.id}:${pinId}`)?.length || 0) > 0
+      );
+      if (!hasAnyWire) {
+        issues.push({
+          id: `unsequenced-${node.id}`,
+          severity: 'warn',
+          message: `${node.label} is sequencing nothing — wire a Row out to an Envelope's Trig.`,
+          nodeId: node.id,
+        });
+      }
+    }
+
     // Rule 3: node (except master_out) whose audio outputs all have zero wires
     if (node.type !== 'master_out') {
       const audioOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'audio');

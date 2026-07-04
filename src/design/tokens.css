@@ -814,6 +814,75 @@ body {
 .pl-issue--warn { border-left: 3px solid var(--meter-peak); }
 .pl-issue--info { border-left: 3px solid var(--signal-4); }
 
+/* ----------------------------------------------------------- step sequencer */
+
+.pl-node.is-seq {
+  width: 320px;
+}
+
+.pl-seq-block {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pl-seq-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pl-seq-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pl-seq-row-label {
+  font: 450 9px var(--font-data);
+  color: var(--text-disabled);
+  width: 12px;
+}
+
+.pl-seq-cell {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  padding: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+
+.pl-seq-cell.is-beat {
+  border-color: var(--text-disabled);
+}
+
+.pl-seq-cell.is-on {
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+}
+
+.pl-seq-cell.is-playhead {
+  background: color-mix(in srgb, var(--signal-1) 18%, transparent);
+}
+
+.pl-seq-cell.is-on.is-playhead {
+  background: color-mix(in srgb, var(--signal-1) 40%, var(--text-primary));
+}
+
+.pl-seq-cell.is-inactive {
+  opacity: 0.25;
+}
+
+.pl-seq-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 /* ----------------------------------------------- react-flow chrome */
 
 .react-flow__attribution {

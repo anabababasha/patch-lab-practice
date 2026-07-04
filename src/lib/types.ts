@@ -20,6 +20,7 @@ export interface ParamSpec {
   kind?: 'slider' | 'toggle' | 'select';
   /** for kind 'select': value is the option index */
   options?: string[];
+  hidden?: boolean;
 }
 
 /** Contract every audio component factory fulfils. */
@@ -35,7 +36,7 @@ export interface AudioUnit {
   /** optional high-resolution analyser for the Analyzer scope display */
   scope?: AnalyserNode;
   /** optional event triggers, e.g. envelope fire */
-  triggerIns?: Record<string, () => void>;
+  triggerIns?: Record<string, (time?: number) => void>;
   dispose(): void;
 }
 
@@ -64,7 +65,7 @@ export interface ComponentSpec {
     }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic' | 'trigger';
+  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

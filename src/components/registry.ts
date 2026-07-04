@@ -19,6 +19,7 @@ import {
   createSignalGen,
   createTriggerPad,
   createEnvelope,
+  createStepSequencer,
 } from '../audio/units';
 
 /* ------------------------------------------------------------ helpers */
@@ -282,6 +283,41 @@ export const registry: Record<string, ComponentSpec> = {
       ],
     },
     createAudio: createLFO,
+  },
+
+  step_seq: {
+    type: 'step_seq',
+    name: 'Step Sequencer',
+    category: 'mod',
+    display: 'sequencer',
+    pins: [
+      tOut('row1', 'Row 1 · Doum'),
+      tOut('row2', 'Row 2 · Tak'),
+      tOut('row3', 'Row 3 · Ka'),
+      tOut('row4', 'Row 4 · Ghost'),
+    ],
+    params: [
+      { id: 'steps', label: 'Steps', unit: '', min: 1, max: 16, step: 1, default: 16 },
+      { id: 'rate', label: 'Rate', unit: '', min: 0, max: 1, step: 1, default: 0, kind: 'select', options: ['1/8', '1/16'] },
+      ...Array.from({ length: 64 }, (_, i) => ({
+        id: `s${Math.floor(i / 16) + 1}_${(i % 16) + 1}`,
+        label: '',
+        unit: '' as const,
+        min: 0,
+        max: 1,
+        step: 1,
+        default: 0,
+        kind: 'toggle' as const,
+        hidden: true,
+      })),
+    ],
+    internalRouting: {},
+    help: {
+      summary: "Pattern sequencer on the global transport. Four trigger rows — Doum, Tak, Ka, Ghost — fire envelopes in time. Presets load classic Arabic iqa'at.",
+      tips: ["Row outs → Envelope Trigs → your drum voices.", "Set Steps to 10 and load Sama'i — odd meters are first-class here.", "Edit cells while it plays; changes land on the next pass."],
+      flows: [{ title: 'Drum voice', chain: [{label:'Step Seq · Row 1'}, {label:'Envelope', kind:'trigger'}, {label:'Gain · Mod', kind:'control'}] }]
+    },
+    createAudio: createStepSequencer,
   },
 
   /* ----------------------------------------------------------- dsp */
@@ -656,7 +692,7 @@ export const paletteOrder: Array<{
     label: 'Sources',
     types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in'],
   },
-  { category: 'mod', label: 'Modulation', types: ['lfo', 'envelope', 'trigger_pad'] },
+  { category: 'mod', label: 'Modulation', types: ['lfo', 'envelope', 'trigger_pad', 'step_seq'] },
   {
     category: 'dsp',
     label: 'DSP',

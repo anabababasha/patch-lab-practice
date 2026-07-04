@@ -29,6 +29,12 @@ Build 3 adds trigger signals (dotted wires) for real-time events. Try this kick 
 
 Tapping the pad should produce a clean, punchy kick drum per tap.
 
+## Drum machine
+
+Build 4 adds a global transport (BPM + Play/Stop) and a Step Sequencer. The step sequencer uses a sample-accurate lookahead scheduler to emit triggers in perfect time, turning envelopes into a drum machine. 
+
+The sequencer comes loaded with classic Arabic iqa'at pattern presets: Maqsum, Baladi, Saidi, Malfuf, and Sama'i. Odd meters are fully supported — the Sama'i preset configures a 10/8 cycle seamlessly. Load the "Drum Machine (Maqsum)" example from the Examples menu and press Play!
+
 ## Develop
 
 ```bash
@@ -65,4 +71,4 @@ The Master Output always runs through a brickwall-style limiter (−1 dB ceiling
 
 ## Roadmap
 
-Build 2: full DSP bench (PEQ, compressor, mixer, router with dynamic trace routing, delay, filters, media player, mic input) · Build 3: guided training scenarios · Build 4: network/Dante dual-view · Build 5: control layer. See `docs/ARCHITECTURE.md`.
+Build 2: full DSP bench (PEQ, compressor, mixer, router with dynamic trace routing, delay, filters, media player, mic input) · Build 3: triggers and real-time events · Build 4: global transport, sequencers, drum machines · Build 5: control layer. See `docs/ARCHITECTURE.md`.

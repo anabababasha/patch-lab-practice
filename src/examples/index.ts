@@ -114,4 +114,47 @@ export const examples = [
       w(analyzer, 'out', master, 'in');
     }),
   },
+  {
+    id: 'drum_machine_maqsum',
+    name: 'Drum Machine (Maqsum)',
+    blurb: "Press Play. That's Maqsum — doum on the sine, tak on the noise.",
+    build: () => buildExample((n, w) => {
+      const p: Record<string, number> = { steps: 8, rate: 0 }; // 0 = 1/8
+      [1,0,0,0,1,0,0,0].forEach((v, c) => p[`s1_${c+1}`] = v);
+      [0,1,0,1,0,0,1,0].forEach((v, c) => p[`s2_${c+1}`] = v);
+
+      const seq = n('step_seq', 0, 0, p);
+      
+      const envA = n('envelope', 340, 0, { attack: 1, decay: 60 });
+      const envB = n('envelope', 340, 140, { attack: 0.5, decay: 200 });
+      const sigA = n('signal_gen', 600, 0, { type: 0, freq: 50, level: -6, pitchAmt: 2400 });
+      const gainA = n('gain', 860, 0, { gain: -60, modAmt: 100 });
+      
+      const envC = n('envelope', 340, 280, { attack: 0.3, decay: 90 });
+      const noise = n('noise_gen', 600, 280, { type: 1, level: -10 }); // 1 = White
+      const filter = n('filter', 600, 420, { type: 1, freq: 2500, q: 1.5 }); // 1 = High-pass
+      const gainB = n('gain', 860, 280, { gain: -60, modAmt: 100 });
+      
+      const mixer = n('mixer', 1120, 0);
+      const master = n('master_out', 1380, 0);
+
+      // Doum (Row 1)
+      w(seq, 'row1', envA, 'trig');
+      w(seq, 'row1', envB, 'trig');
+      w(envA, 'out', sigA, 'pitch');
+      w(sigA, 'out', gainA, 'in');
+      w(envB, 'out', gainA, 'mod');
+      
+      // Tak (Row 2)
+      w(seq, 'row2', envC, 'trig');
+      w(noise, 'out', filter, 'in');
+      w(filter, 'out', gainB, 'in');
+      w(envC, 'out', gainB, 'mod');
+      
+      // Mix
+      w(gainA, 'out', mixer, 'in1');
+      w(gainB, 'out', mixer, 'in2');
+      w(mixer, 'out', master, 'in');
+    }),
+  },
 ];
