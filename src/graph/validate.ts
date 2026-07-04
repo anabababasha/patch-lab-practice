@@ -52,9 +52,10 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
       for (const pin of audioIns) {
         const key = `${node.id}:${pin.id}`;
         if (!inWires.has(key) || inWires.get(key)!.length === 0) {
+          const isMixerOrRouter = node.type === 'mixer' || node.type === 'router';
           issues.push({
             id: `unconnected-in-${key}`,
-            severity: 'warn',
+            severity: isMixerOrRouter ? 'info' : 'warn',
             message: `Input '${pin.label}' of ${node.label} is unconnected.`,
             nodeId: node.id,
             pin: { nodeId: node.id, pinId: pin.id },
@@ -172,17 +173,19 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
     }
 
     // Rule 8: Node with trigger output but zero wires
-    const triggerOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'trigger');
-    for (const pin of triggerOuts) {
-      const key = `${node.id}:${pin.id}`;
-      if (!outWires.has(key) || outWires.get(key)!.length === 0) {
-        issues.push({
-          id: `trigger-unconnected-${key}`,
-          severity: 'warn',
-          message: `${node.label} is not connected to anything — it won't do anything when tapped.`,
-          nodeId: node.id,
-          pin: { nodeId: node.id, pinId: pin.id },
-        });
+    if (node.type !== 'step_seq') {
+      const triggerOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'trigger');
+      for (const pin of triggerOuts) {
+        const key = `${node.id}:${pin.id}`;
+        if (!outWires.has(key) || outWires.get(key)!.length === 0) {
+          issues.push({
+            id: `trigger-unconnected-${key}`,
+            severity: 'warn',
+            message: `${node.label} is not connected to anything — it won't do anything when tapped.`,
+            nodeId: node.id,
+            pin: { nodeId: node.id, pinId: pin.id },
+          });
+        }
       }
     }
   }

@@ -127,7 +127,7 @@ export const examples = [
       
       const envA = n('envelope', 340, 0, { attack: 1, decay: 60 });
       const envB = n('envelope', 340, 140, { attack: 0.5, decay: 200 });
-      const sigA = n('signal_gen', 600, 0, { type: 0, freq: 50, level: -6, pitchAmt: 2400 });
+      const sigA = n('signal_gen', 600, 0, { wave: 0, freq: 50, level: -6, pitchAmt: 2400 });
       const gainA = n('gain', 860, 0, { gain: -60, modAmt: 100 });
       
       const envC = n('envelope', 340, 280, { attack: 0.3, decay: 90 });

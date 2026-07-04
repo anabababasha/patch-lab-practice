@@ -47,7 +47,10 @@ export function sanitizeDesign(raw: unknown): Design | null {
     const src = n as NodeInstance;
     const resolvedType = typeAliases[src.type] ?? src.type;
     const spec = registry[resolvedType];
-    if (!spec) continue; // unknown component type -> drop
+    if (!spec) {
+      console.warn(`sanitizeDesign: Dropped node '${src.id}' — unknown type '${src.type}'`);
+      continue;
+    }
     const params: Record<string, number> = {};
     for (const p of spec.params) {
       const v = src.params?.[p.id];
@@ -55,6 +58,13 @@ export function sanitizeDesign(raw: unknown): Design | null {
         typeof v === 'number' && Number.isFinite(v)
           ? Math.min(p.max, Math.max(p.min, v))
           : p.default;
+    }
+    if (src.params) {
+      for (const key of Object.keys(src.params)) {
+        if (!spec.params.some((p) => p.id === key)) {
+          console.warn(`sanitizeDesign: Dropped param '${key}' on node '${src.id}' (type '${spec.type}')`);
+        }
+      }
     }
     let meta: Record<string, string> | undefined;
     if (src.meta && typeof src.meta === 'object') {
@@ -92,9 +102,23 @@ export function sanitizeDesign(raw: unknown): Design | null {
     const src = w as Wire;
     const fromPin = pinSpec(src.from, 'out');
     const toPin = pinSpec(src.to, 'in');
-    if (!fromPin || !toPin || fromPin.kind !== toPin.kind) continue;
+    if (!fromPin) {
+      console.warn(`sanitizeDesign: Dropped wire '${src.id}' — fromPin '${src.from?.pinId}' not found on node '${src.from?.nodeId}'`);
+      continue;
+    }
+    if (!toPin) {
+      console.warn(`sanitizeDesign: Dropped wire '${src.id}' — toPin '${src.to?.pinId}' not found on node '${src.to?.nodeId}'`);
+      continue;
+    }
+    if (fromPin.kind !== toPin.kind) {
+      console.warn(`sanitizeDesign: Dropped wire '${src.id}' — kind mismatch ('${fromPin.kind}' vs '${toPin.kind}')`);
+      continue;
+    }
     const inKey = `${src.to.nodeId}:${src.to.pinId}`;
-    if (takenInputs.has(inKey)) continue;
+    if (takenInputs.has(inKey)) {
+      console.warn(`sanitizeDesign: Dropped wire '${src.id}' — input '${inKey}' already taken`);
+      continue;
+    }
     takenInputs.add(inKey);
     wires.push({
       id: typeof src.id === 'string' ? src.id : uid('w'),
