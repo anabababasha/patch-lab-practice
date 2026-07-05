@@ -634,6 +634,11 @@ body {
   min-width: 0;
 }
 
+.pl-param--field {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
 .pl-param__label {
   width: 76px;
   flex: none;
@@ -649,6 +654,11 @@ body {
   min-width: 0;
 }
 
+.pl-param--field .pl-param__slider {
+  flex: 1 1 160px;
+  min-width: 160px;
+}
+
 .pl-param__number {
   width: 68px;
   background: var(--surface);
@@ -658,6 +668,18 @@ body {
   font: 500 12px var(--font-data);
   font-variant-numeric: tabular-nums;
   padding: 4px 6px;
+}
+
+.pl-param--field .pl-param__number {
+  width: 76px;
+  flex: 0 0 76px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.pl-param--field .pl-param__number:focus {
+  cursor: text;
+  user-select: text;
 }
 
 .pl-param__select {
@@ -878,6 +900,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.pl-seq-head {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.pl-mute-chip {
+  min-width: 52px;
+}
+
+.pl-mute-chip.is-on {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
 }
 
 .pl-seq-grid {

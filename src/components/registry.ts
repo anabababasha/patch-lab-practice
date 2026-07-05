@@ -111,6 +111,17 @@ const toggle = (id: string, label: string, def = 0): ParamSpec => ({
   kind: 'toggle',
 });
 
+const pan = (id: string, label: string): ParamSpec => ({
+  id,
+  label,
+  unit: '',
+  min: -1,
+  max: 1,
+  step: 0.01,
+  default: 0,
+  taper: 'lin',
+});
+
 const select = (
   id: string,
   label: string,
@@ -384,6 +395,7 @@ export const registry: Record<string, ComponentSpec> = {
     params: [
       { id: 'steps', label: 'Steps', unit: '', min: 1, max: 16, step: 1, default: 16 },
       { id: 'rate', label: 'Rate', unit: '', min: 0, max: 1, step: 1, default: 0, kind: 'select', options: ['1/8', '1/16'] },
+      toggle('muted', 'Mute'),
       ...Array.from({ length: 64 }, (_, i) => ({
         id: `s${Math.floor(i / 16) + 1}_${(i % 16) + 1}`,
         label: '',
@@ -399,7 +411,7 @@ export const registry: Record<string, ComponentSpec> = {
     internalRouting: {},
     help: {
       summary: "Pattern sequencer on the global transport. Four trigger rows — Doum, Tak, Ka, Ghost — fire envelopes in time. Presets load classic Arabic iqa'at.",
-      tips: ["Row outs → Envelope Trigs → your drum voices.", "Set Steps to 10 and load Sama'i — odd meters are first-class here.", "Edit cells while it plays; changes land on the next pass."],
+      tips: ["Row outs → Envelope Trigs → your drum voices.", "Mute stops new triggers while the playhead keeps sweeping; triggers already inside the lookahead window can still fire for about 100 ms.", "Set Steps to 10 and load Sama'i — odd meters are first-class here.", "Edit cells while it plays; changes land on the next pass."],
       flows: [{ title: 'Drum voice', chain: [{label:'Step Seq · Row 1'}, {label:'Envelope', kind:'trigger'}, {label:'Gain · Mod', kind:'control'}] }]
     },
     createAudio: createStepSequencer,
@@ -686,9 +698,13 @@ export const registry: Record<string, ComponentSpec> = {
     ],
     params: [
       db('lvl1', 'Level 1', -60, 12, 0),
+      pan('pan1', 'Pan 1'),
       db('lvl2', 'Level 2', -60, 12, 0),
+      pan('pan2', 'Pan 2'),
       db('lvl3', 'Level 3', -60, 12, 0),
+      pan('pan3', 'Pan 3'),
       db('lvl4', 'Level 4', -60, 12, 0),
+      pan('pan4', 'Pan 4'),
       db('master', 'Master', -60, 12, 0),
     ],
     internalRouting: {
@@ -698,8 +714,8 @@ export const registry: Record<string, ComponentSpec> = {
       in4: ['out'],
     },
     help: {
-      summary: 'Sums up to four sources with per-input level and a master trim — how multiple chains reach one output.',
-      tips: ['Inputs sum: four hot signals can overload — trim each.', 'This is the ONLY way to merge signals; inputs accept one wire each.'],
+      summary: 'Each input has Level + Pan — a four-channel console into one stereo Mix Out.',
+      tips: ['Inputs sum: four hot signals can overload — trim each.', 'Pan each input before the stereo Mix Out to place sources left, center, or right.', 'This is the ONLY way to merge signals; inputs accept one wire each.'],
       flows: [
         { title: 'Sum two chains', chain: [{label:'Source A / Source B'}, {label:'Mixer', kind:'audio'}, {label:'Master Out', kind:'audio'}] }
       ],
@@ -778,6 +794,7 @@ export const registry: Record<string, ComponentSpec> = {
         'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
         'Output is silent while empty or stopped; fan out the dry source if you want live monitoring.',
         'Drag the edges of the waveform to trim the loop - edges snap to zero-crossings so it never clicks.',
+        'Normalize, Reverse, trim, and Speed update the playing loop through the loop-only output path.',
         '\u00bd\u00d7 is an octave down, tape-style.',
       ],
       flows: [
@@ -820,12 +837,13 @@ export const registry: Record<string, ComponentSpec> = {
     name: 'Master Output',
     category: 'output',
     pins: [aIn('in', 'Input')],
-    params: [db('level', 'Level', -60, 0, -6)],
+    params: [db('level', 'Level', -60, 0, -6), toggle('muted', 'Mute')],
     internalRouting: { in: [] },
     help: {
-      summary: 'The speakers. Includes a permanent safety limiter at −1 dBFS; the meter reads PRE-limiter so you can see an overdriven sum you\'ll never hear.',
-      tips: ['Red clip segment = your mix is over; turn sources down, not just this fader.', 'Multiple Master Outputs are allowed but usually a mistake.'],
+      summary: 'The speakers. Includes a permanent safety limiter at −1 dBFS and a click-free final mute; the meter stays live before the limiter and mute.',
+      tips: ['Red clip segment = your mix is over; turn sources down, not just this fader.', 'Mute silences this Master only while the meter keeps showing what will return.', 'Multiple Master Outputs are allowed but usually a mistake.'],
     },
+    display: 'master',
     createAudio: createMasterOut,
   },
 };

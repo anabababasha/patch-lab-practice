@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/store';
 import { midiService } from '../audio/midiService';
 import { registry } from '../components/registry';
@@ -11,6 +11,254 @@ import {
   toNorm,
 } from '../lib/units';
 
+const DRAG_THRESHOLD_PX = 3;
+const DRAG_FULL_RANGE_PX = 150;
+const WHEEL_BURST_MS = 250;
+
+const decimalsForStep = (step: number) => {
+  const text = step.toString();
+  if (!text.includes('.')) return 0;
+  return text.split('.')[1]?.length ?? 0;
+};
+
+const displayNumber = (value: number, step: number) =>
+  Number(value.toFixed(Math.min(6, decimalsForStep(step)))).toString();
+
+type NumberDragState = {
+  pointerId: number;
+  startY: number;
+  startNorm: number;
+  dragging: boolean;
+  startedGesture: boolean;
+  previousUserSelect: string;
+  previousCursor: string;
+};
+
+function ParamField({
+  nodeId,
+  spec,
+  value,
+}: {
+  nodeId: string;
+  spec: ParamSpec;
+  value: number;
+}) {
+  const setParam = useApp((s) => s.setParam);
+  const beginParamGesture = useApp((s) => s.beginParamGesture);
+  const setParamLive = useApp((s) => s.setParamLive);
+  const finishParamGesture = useApp((s) => s.finishParamGesture);
+  const [stagedValue, setStagedValue] = useState<string | null>(null);
+  const valueRef = useRef(value);
+  const dragRef = useRef<NumberDragState | null>(null);
+  const wheelActiveRef = useRef(false);
+  const wheelTimerRef = useRef<number | undefined>();
+  const sliderGestureRef = useRef(false);
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(wheelTimerRef.current);
+      if (wheelActiveRef.current) finishParamGesture(nodeId, spec.id);
+      const drag = dragRef.current;
+      if (drag?.dragging) {
+        document.body.style.userSelect = drag.previousUserSelect;
+        document.body.style.cursor = drag.previousCursor;
+      }
+    };
+  }, [finishParamGesture, nodeId, spec.id]);
+
+  const taper = spec.taper ?? 'lin';
+  const norm = toNorm(value, spec.min, spec.max, taper);
+
+  const sanitize = (v: number, step = spec.step) =>
+    clamp(roundToStep(v, step), spec.min, spec.max);
+
+  const commit = (v: number) => {
+    const next = sanitize(v);
+    valueRef.current = next;
+    setParam(nodeId, spec.id, next);
+  };
+
+  const commitLive = (v: number, step = spec.step) => {
+    const next = sanitize(v, step);
+    valueRef.current = next;
+    setParamLive(nodeId, spec.id, next);
+  };
+
+  const reset = () => {
+    setStagedValue(null);
+    commit(spec.default);
+  };
+
+  const restoreBodyDragStyles = () => {
+    const drag = dragRef.current;
+    if (!drag?.dragging) return;
+    document.body.style.userSelect = drag.previousUserSelect;
+    document.body.style.cursor = drag.previousCursor;
+  };
+
+  const finishDrag = () => {
+    const drag = dragRef.current;
+    if (drag?.startedGesture) finishParamGesture(nodeId, spec.id);
+    restoreBodyDragStyles();
+    dragRef.current = null;
+  };
+
+  const stepValue = (direction: number, fine: boolean) => {
+    const step = fine ? spec.step * 0.1 : spec.step;
+    return sanitize(valueRef.current + direction * step, step);
+  };
+
+  return (
+    <div className="pl-param pl-param--field">
+      <span
+        className="pl-param__label"
+        title="Double-click to reset"
+        onDoubleClick={reset}
+      >
+        {spec.label}
+      </span>
+      <input
+        className="pl-param__slider"
+        type="range"
+        min={0}
+        max={1000}
+        step={1}
+        value={Math.round(norm * 1000)}
+        onPointerDown={() => {
+          beginParamGesture(nodeId, spec.id);
+          sliderGestureRef.current = true;
+        }}
+        onPointerUp={() => {
+          if (sliderGestureRef.current) finishParamGesture(nodeId, spec.id);
+          sliderGestureRef.current = false;
+        }}
+        onPointerCancel={() => {
+          if (sliderGestureRef.current) finishParamGesture(nodeId, spec.id);
+          sliderGestureRef.current = false;
+        }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          reset();
+        }}
+        onChange={(e) => {
+          const next = fromNorm(Number(e.target.value) / 1000, spec.min, spec.max, taper);
+          if (sliderGestureRef.current) commitLive(next);
+          else commit(next);
+        }}
+        aria-label={spec.label}
+      />
+      <input
+        className="pl-param__number"
+        type="text"
+        value={stagedValue !== null ? stagedValue : displayNumber(value, spec.step)}
+        onChange={(e) => setStagedValue(e.target.value)}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          dragRef.current = {
+            pointerId: e.pointerId,
+            startY: e.clientY,
+            startNorm: norm,
+            dragging: false,
+            startedGesture: false,
+            previousUserSelect: document.body.style.userSelect,
+            previousCursor: document.body.style.cursor,
+          };
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== e.pointerId) return;
+          const dy = drag.startY - e.clientY;
+          if (!drag.dragging) {
+            if (Math.abs(dy) < DRAG_THRESHOLD_PX) return;
+            drag.dragging = true;
+            drag.startedGesture = true;
+            beginParamGesture(nodeId, spec.id);
+            setStagedValue(null);
+            e.currentTarget.blur();
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'ns-resize';
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          const sensitivity = e.shiftKey ? DRAG_FULL_RANGE_PX * 10 : DRAG_FULL_RANGE_PX;
+          const nextNorm = clamp(drag.startNorm + dy / sensitivity, 0, 1);
+          commitLive(fromNorm(nextNorm, spec.min, spec.max, taper));
+        }}
+        onPointerUp={(e) => {
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== e.pointerId) return;
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+          if (drag.dragging) {
+            e.preventDefault();
+            e.stopPropagation();
+            finishDrag();
+          } else {
+            dragRef.current = null;
+            e.currentTarget.focus();
+            e.currentTarget.select();
+          }
+        }}
+        onPointerCancel={(e) => {
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== e.pointerId) return;
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+          finishDrag();
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!wheelActiveRef.current) {
+            beginParamGesture(nodeId, spec.id);
+            wheelActiveRef.current = true;
+          }
+          const direction = e.deltaY < 0 ? 1 : -1;
+          commitLive(stepValue(direction, e.shiftKey), e.shiftKey ? spec.step * 0.1 : spec.step);
+          window.clearTimeout(wheelTimerRef.current);
+          wheelTimerRef.current = window.setTimeout(() => {
+            finishParamGesture(nodeId, spec.id);
+            wheelActiveRef.current = false;
+          }, WHEEL_BURST_MS);
+        }}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          reset();
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            setStagedValue(null);
+            e.currentTarget.blur();
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            setStagedValue(null);
+            setParam(nodeId, spec.id, stepValue(e.key === 'ArrowUp' ? 1 : -1, e.shiftKey));
+          }
+        }}
+        onBlur={() => {
+          if (stagedValue !== null) {
+            const v = Number(stagedValue);
+            if (stagedValue.trim() === '' || !Number.isFinite(v)) {
+              setStagedValue(null);
+            } else {
+              commit(v);
+              setStagedValue(null);
+            }
+          }
+        }}
+        title={formatValue(value, spec.unit, spec.step)}
+        aria-label={`${spec.label} value`}
+      />
+    </div>
+  );
+}
+
 function ParamControl({
   nodeId,
   spec,
@@ -22,7 +270,6 @@ function ParamControl({
 }) {
   const setParam = useApp((s) => s.setParam);
   const [, setOptionVersion] = useState(0);
-  const [stagedValue, setStagedValue] = useState<string | null>(null);
 
   useEffect(() => {
     if (spec.dynamicOptions !== 'midiInputs') return;
@@ -91,64 +338,7 @@ function ParamControl({
     );
   }
 
-  const taper = spec.taper ?? 'lin';
-  const norm = toNorm(value, spec.min, spec.max, taper);
-
-  const commit = (v: number) =>
-    setParam(nodeId, spec.id, clamp(roundToStep(v, spec.step), spec.min, spec.max));
-
-  return (
-    <div className="pl-param">
-      <span
-        className="pl-param__label"
-        title="Double-click to reset"
-        onDoubleClick={() => commit(spec.default)}
-      >
-        {spec.label}
-      </span>
-      <input
-        className="pl-param__slider"
-        type="range"
-        min={0}
-        max={1000}
-        step={1}
-        value={Math.round(norm * 1000)}
-        onChange={(e) =>
-          commit(fromNorm(Number(e.target.value) / 1000, spec.min, spec.max, taper))
-        }
-        aria-label={spec.label}
-      />
-      <input
-        className="pl-param__number"
-        type="text"
-        value={stagedValue !== null ? stagedValue : Number(value.toFixed(2)).toString()}
-        onChange={(e) => setStagedValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.currentTarget.blur();
-          } else if (e.key === 'Escape') {
-            setStagedValue(null);
-            e.currentTarget.blur();
-          } else {
-            e.stopPropagation();
-          }
-        }}
-        onBlur={() => {
-          if (stagedValue !== null) {
-            const v = Number(stagedValue);
-            if (stagedValue.trim() === '' || !Number.isFinite(v)) {
-              setStagedValue(null);
-            } else {
-              commit(v);
-              setStagedValue(null);
-            }
-          }
-        }}
-        aria-label={`${spec.label} value`}
-      />
-      <span className="pl-param__value">{formatValue(value, spec.unit, spec.step)}</span>
-    </div>
-  );
+  return <ParamField nodeId={nodeId} spec={spec} value={value} />;
 }
 
 export function Inspector() {

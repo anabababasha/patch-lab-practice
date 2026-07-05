@@ -697,15 +697,18 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
   let steps = 16;
   let rateDiv = 2; // 1/8 default
   let pos = 0;
+  let muted = false;
 
   const onTick = (time: number, tickIndex: number) => {
     if (tickIndex % rateDiv !== 0) return;
     const step = pos % steps;
     pos = (step + 1) % steps;
     
-    for (let row = 0; row < 4; row++) {
-      if (pattern[row][step] === 1) {
-        triggerBus.emit(nodeId, `row${row + 1}`, time);
+    if (!muted) {
+      for (let row = 0; row < 4; row++) {
+        if (pattern[row][step] === 1) {
+          triggerBus.emit(nodeId, `row${row + 1}`, time);
+        }
       }
     }
     
@@ -735,6 +738,7 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
         pos = pos % steps;
       }
       else if (id === 'rate') rateDiv = Math.round(v) === 0 ? 2 : 1;
+      else if (id === 'muted') muted = v > 0.5;
       else if (id.startsWith('s')) {
         const m = id.match(/s(\d)_(\d+)/);
         if (m) {
@@ -971,10 +975,14 @@ export function createMixer(ctx: AudioContext): AudioUnit {
     g.gain.value = 1;
     return g;
   });
+  const panners = [0, 1, 2, 3].map(() => ctx.createStereoPanner());
   const sum = ctx.createGain();
   sum.gain.value = 1;
   const an = makeAnalyser(ctx);
-  ins.forEach((g) => g.connect(sum));
+  ins.forEach((g, i) => {
+    g.connect(panners[i]);
+    panners[i].connect(sum);
+  });
   sum.connect(an);
 
   return {
@@ -984,10 +992,13 @@ export function createMixer(ctx: AudioContext): AudioUnit {
     bind(id, v) {
       const m = /^lvl([1-4])$/.exec(id);
       if (m) setNow(ins[Number(m[1]) - 1].gain, dbToGain(v), ctx);
+      const p = /^pan([1-4])$/.exec(id);
+      if (p) setNow(panners[Number(p[1]) - 1].pan, clamp(v, -1, 1), ctx);
       if (id === 'master') setNow(sum.gain, dbToGain(v), ctx);
     },
     dispose() {
       ins.forEach(disconnectNode);
+      panners.forEach(disconnectNode);
       disconnectNode(sum);
       disconnectNode(an);
     },
@@ -1133,10 +1144,13 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
   limiter.ratio.value = 20;
   limiter.attack.value = 0.003;
   limiter.release.value = 0.25;
+  const mute = ctx.createGain();
+  mute.gain.value = 1;
 
   level.connect(an);
   an.connect(limiter);
-  limiter.connect(ctx.destination);
+  limiter.connect(mute);
+  mute.connect(ctx.destination);
 
   return {
     inputs: { in: level },
@@ -1144,11 +1158,13 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
     analysers: { main: an },
     bind(id, v) {
       if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
+      if (id === 'muted') mute.gain.setTargetAtTime(v > 0.5 ? 0 : 1, ctx.currentTime, 0.015);
     },
     dispose() {
       disconnectNode(level);
       disconnectNode(an);
       disconnectNode(limiter);
+      disconnectNode(mute);
     },
   };
 }

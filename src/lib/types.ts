@@ -69,7 +69,7 @@ export interface ComponentSpec {
     }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper' | 'eq' | 'midi';
+  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper' | 'eq' | 'midi' | 'master';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

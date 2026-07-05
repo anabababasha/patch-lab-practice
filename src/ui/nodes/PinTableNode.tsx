@@ -585,6 +585,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         ? `MIDI: ${midiStatus.inputCount} inputs`
         : 'MIDI: not enabled';
   const computerKeysOn = (node.params.computer ?? 0) > 0.5;
+  const nodeMuted = (node.params.muted ?? 0) > 0.5;
 
   const inPins = spec.pins.filter((p) => p.direction === 'in');
   const outPins = spec.pins.filter((p) => p.direction === 'out');
@@ -865,6 +866,21 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         </div>
       )}
 
+      {spec.display === 'master' && (
+        <div className="pl-node__extra">
+          <button
+            className={['pl-mini-btn', 'pl-mute-chip', 'nodrag', nodeMuted ? 'is-on' : ''].join(' ')}
+            aria-pressed={nodeMuted}
+            onClick={(e) => {
+              e.stopPropagation();
+              useApp.getState().setParam(id, 'muted', nodeMuted ? 0 : 1);
+            }}
+          >
+            Mute
+          </button>
+        </div>
+      )}
+
       {spec.display === 'looper' && (
         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -958,6 +974,18 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
       {spec.display === 'sequencer' && (
         <div className="pl-seq-block" ref={seqRef}>
+          <div className="pl-seq-head">
+            <button
+              className={['pl-mini-btn', 'pl-mute-chip', 'nodrag', nodeMuted ? 'is-on' : ''].join(' ')}
+              aria-pressed={nodeMuted}
+              onClick={(e) => {
+                e.stopPropagation();
+                useApp.getState().setParam(id, 'muted', nodeMuted ? 0 : 1);
+              }}
+            >
+              Mute
+            </button>
+          </div>
           <div className="pl-seq-grid">
             {['D', 'T', 'K', 'G'].map((rowLabel, r) => (
               <div key={r} className="pl-seq-row">

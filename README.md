@@ -67,6 +67,10 @@ The **Looper** node allows you to capture a performance through it, loop it inst
 
 When a loop is captured, the Looper opens a waveform window. Drag either edge to trim the live loop region; synced loops snap to the 16th-note grid first, then to nearby zero-crossings to keep seams clean. The Looper can also Normalize quiet captures, Reverse the buffer, and switch Speed between half-time, normal, and double-time tape-style playback while the loop keeps running.
 
+## Performance controls
+
+Build 5c adds faster live controls for performance patching: numeric value fields drag vertically, wheel/arrow-step, Shift-fine, and double-click reset while preserving typed-entry undo behavior. Step Sequencers and Master Outputs now have per-node Mute controls, and Mixer 4×1 inputs each have Level plus Pan for building a stereo mix before the Master or Recorder.
+
 ## Visual EQ
 
 The **Filter** and **Parametric EQ** nodes show a live spectrum underlay with the current response curve; Parametric EQ bands can be dragged directly on the curve.

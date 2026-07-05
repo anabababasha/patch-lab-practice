@@ -201,15 +201,12 @@ class LooperService {
     const entry = this.entries.get(nodeId);
     if (!entry?.buffer) return;
 
-    let peak = 0;
-    for (let ch = 0; ch < entry.buffer.numberOfChannels; ch++) {
-      const data = entry.buffer.getChannelData(ch);
-      for (let i = 0; i < data.length; i++) {
-        const abs = Math.abs(data[i]);
-        if (abs > peak) peak = abs;
-      }
-    }
+    const peak = this.measurePeak(entry.buffer);
     if (peak === 0) return;
+    const wasPlaying = entry.state === 'playing';
+    const restartOffset = wasPlaying
+      ? this.getPlaybackOffset(entry, entry.ctx.currentTime)
+      : entry.regionStart;
 
     const scale = TARGET_DBFS / peak;
     for (let ch = 0; ch < entry.buffer.numberOfChannels; ch++) {
@@ -218,6 +215,15 @@ class LooperService {
     }
 
     entry.bufferVersion++;
+    const peakAfter = this.measurePeak(entry.buffer);
+    console.debug('[looper] normalize', {
+      nodeId,
+      peakBefore: peak,
+      peakAfter,
+      restarted: wasPlaying,
+      connectTarget: wasPlaying ? 'entry.bus' : 'not playing',
+    });
+    if (wasPlaying) this.startPlayback(entry.ctx, entry, entry.ctx.currentTime, restartOffset);
     this.notify(nodeId, entry);
   }
 
@@ -369,7 +375,12 @@ class LooperService {
     this.notify(nodeId, entry);
   }
 
-  private startPlayback(ctx: AudioContext, entry: LooperEntry, time: number) {
+  private startPlayback(
+    ctx: AudioContext,
+    entry: LooperEntry,
+    time: number,
+    offset = entry.regionStart,
+  ) {
     const t = Math.max(time, ctx.currentTime);
     this.stopPlayback(ctx, entry, t);
     if (!entry.buffer) return;
@@ -393,8 +404,13 @@ class LooperService {
 
     entry.source.connect(entry.sourceGain);
     entry.sourceGain.connect(entry.bus);
-    entry.source.start(t, entry.regionStart);
-    entry.sourceStartTime = t;
+    const startOffset =
+      offset >= entry.regionStart && offset < entry.regionEnd
+        ? offset
+        : entry.regionStart;
+    entry.source.start(t, startOffset);
+    entry.sourceStartTime =
+      t - (startOffset - entry.regionStart) / Math.max(0.0001, entry.speed);
   }
 
   private stopPlayback(ctx: AudioContext, entry: LooperEntry, time: number) {
@@ -449,6 +465,25 @@ class LooperService {
     if (!entry.source) return;
     entry.source.loopStart = entry.regionStart;
     entry.source.loopEnd = entry.regionEnd;
+  }
+
+  private getPlaybackOffset(entry: LooperEntry, time: number) {
+    if (!entry.buffer || entry.regionEnd <= entry.regionStart) return entry.regionStart;
+    const regionLength = entry.regionEnd - entry.regionStart;
+    const elapsed = Math.max(0, time - entry.sourceStartTime) * entry.speed;
+    return entry.regionStart + (elapsed % regionLength);
+  }
+
+  private measurePeak(buffer: AudioBuffer) {
+    let peak = 0;
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const data = buffer.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) {
+        const abs = Math.abs(data[i]);
+        if (abs > peak) peak = abs;
+      }
+    }
+    return peak;
   }
 
   private snapToZeroCrossing(buffer: AudioBuffer, seconds: number) {

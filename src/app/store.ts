@@ -211,7 +211,10 @@ interface AppState {
   removeNode(id: string): void;
   addWire(a: PinRef, b: PinRef): void;
   removeWire(id: string): void;
+  beginParamGesture(nodeId: string, paramId: string): void;
   setParam(nodeId: string, paramId: string, value: number): void;
+  setParamLive(nodeId: string, paramId: string, value: number): void;
+  finishParamGesture(nodeId: string, paramId: string): void;
   setParamsBulk(nodeId: string, values: Record<string, number>, meta?: Record<string, string>): void;
   setName(name: string): void;
   setNodeMeta(nodeId: string, key: string, value: string): void;
@@ -261,6 +264,7 @@ interface AppState {
 let history: Design[] = [];
 let redoStack: Design[] = [];
 let lastParamStamp = { key: '', time: 0 };
+let activeParamGesture: string | null = null;
 let shownAutoStartToast = false;
 
 const updateHistoryState = () => {
@@ -295,6 +299,22 @@ export const useApp = create<AppState>((set, get) => {
         ? computeTrace(s.design, src.pin)
         : computeTraceFromWire(s.design, src.wireId);
     set((st) => ({ ui: { ...st.ui, trace } }));
+  };
+
+  const writeParam = (nodeId: string, paramId: string, value: number) => {
+    const d = get().design;
+    const design = {
+      ...d,
+      nodes: d.nodes.map((n) =>
+        n.id === nodeId
+          ? { ...n, params: { ...n.params, [paramId]: value } }
+          : n,
+      ),
+    };
+    set({ design });
+    saveSoon(design);
+    engine.setParam(nodeId, paramId, value); // live, no rebuild
+    retrace(); // dynamic routing (Router) can change the traced path
   };
 
   return {
@@ -490,6 +510,14 @@ export const useApp = create<AppState>((set, get) => {
 
     /* ------------------------------------------------------- params */
 
+    beginParamGesture(nodeId, paramId) {
+      const key = `${nodeId}:${paramId}`;
+      if (activeParamGesture === key) return;
+      snapshot(get().design);
+      activeParamGesture = key;
+      lastParamStamp = { key: '', time: 0 };
+    },
+
     setParam(nodeId, paramId, value) {
       const key = `${nodeId}:${paramId}`;
       const now = Date.now();
@@ -498,19 +526,17 @@ export const useApp = create<AppState>((set, get) => {
       }
       lastParamStamp = { key, time: now };
 
-      const d = get().design;
-      const design = {
-        ...d,
-        nodes: d.nodes.map((n) =>
-          n.id === nodeId
-            ? { ...n, params: { ...n.params, [paramId]: value } }
-            : n,
-        ),
-      };
-      set({ design });
-      saveSoon(design);
-      engine.setParam(nodeId, paramId, value); // live, no rebuild
-      retrace(); // dynamic routing (Router) can change the traced path
+      writeParam(nodeId, paramId, value);
+    },
+
+    setParamLive(nodeId, paramId, value) {
+      writeParam(nodeId, paramId, value);
+    },
+
+    finishParamGesture(nodeId, paramId) {
+      const key = `${nodeId}:${paramId}`;
+      if (activeParamGesture === key) activeParamGesture = null;
+      lastParamStamp = { key: '', time: 0 };
     },
 
     setParamsBulk(nodeId, values, meta) {
