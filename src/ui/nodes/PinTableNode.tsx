@@ -6,12 +6,29 @@ import { pinKey, type ComponentSpec, type NodeInstance, type ParamSpec } from '.
 import { clamp, roundToStep } from '../../lib/units';
 import { eqService } from '../../audio/eqService';
 import { meterService } from '../../audio/meterService';
+import { midiService } from '../../audio/midiService';
 import { scopeService, type ScopeMode } from '../../audio/scopeService';
 import { recorderService } from '../../audio/recorderService';
 import { looperService } from '../../audio/looperService';
 import { HEADER_H, ROW_H, hueFor } from '../constants';
 
 import { patterns } from '../../patterns';
+
+const MIDI_KEYS = [
+  { note: 60, label: 'A', type: 'white' as const },
+  { note: 61, label: 'W', type: 'black' as const },
+  { note: 62, label: 'S', type: 'white' as const },
+  { note: 63, label: 'E', type: 'black' as const },
+  { note: 64, label: 'D', type: 'white' as const },
+  { note: 65, label: 'F', type: 'white' as const },
+  { note: 66, label: 'T', type: 'black' as const },
+  { note: 67, label: 'G', type: 'white' as const },
+  { note: 68, label: 'Y', type: 'black' as const },
+  { note: 69, label: 'H', type: 'white' as const },
+  { note: 70, label: 'U', type: 'black' as const },
+  { note: 71, label: 'J', type: 'white' as const },
+  { note: 72, label: 'K', type: 'white' as const },
+];
 
 export type PinTableNodeType = Node<{ pl: true }, 'pinTable'>;
 
@@ -181,6 +198,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const seqRef = useRef<HTMLDivElement>(null);
   const recTimeRef = useRef<HTMLSpanElement>(null);
   const loopTimeRef = useRef<HTMLSpanElement>(null);
+  const midiActivityRef = useRef<HTMLSpanElement>(null);
+  const keyboardRef = useRef<HTMLDivElement>(null);
   const loopDragRef = useRef<{ pointerId: number; handle: 'start' | 'end' } | null>(null);
   const loopDragLastRef = useRef(0);
   const eqDragRef = useRef<{ pointerId: number; band: EqBandControl } | null>(null);
@@ -188,7 +207,9 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   const [recState, setRecState] = React.useState<{ state: string, startedAt: number, lastTakeSeconds: number }>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
   const [loopState, setLoopState] = React.useState<{ state: string, startedAt: number, hasLoop: boolean, bufferVersion: number }>({ state: 'empty', startedAt: 0, hasLoop: false, bufferVersion: 0 });
+  const [midiVersion, setMidiVersion] = React.useState(0);
   const spec = node ? registry[node.type] : undefined;
+  const midiStatus = React.useMemo(() => midiService.getStatus(), [midiVersion]);
 
   const applyEqDrag = useCallback(
     (canvas: HTMLCanvasElement, clientX: number, clientY: number, band: EqBandControl) => {
@@ -479,6 +500,42 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
     return () => clearInterval(timer);
   }, [loopState.state, loopState.startedAt]);
 
+  React.useEffect(() => {
+    if (spec?.display !== 'midi') return;
+    return midiService.subscribe(() => setMidiVersion((v) => v + 1));
+  }, [spec?.display]);
+
+  React.useEffect(() => {
+    if (spec?.display !== 'midi') return;
+    let timer: number | undefined;
+    const onNote = (e: Event) => {
+      const ce = e as CustomEvent<{ nodeId: string, note?: number }>;
+      if (ce.detail?.nodeId !== id) return;
+      const dot = midiActivityRef.current;
+      if (dot) {
+        window.clearTimeout(timer);
+        dot.classList.add('is-active');
+        timer = window.setTimeout(() => dot.classList.remove('is-active'), 120);
+      }
+      if (ce.detail.note !== undefined && keyboardRef.current) {
+        const keyEl = keyboardRef.current.querySelector(`[data-note="${ce.detail.note}"]`);
+        if (keyEl) {
+          keyEl.classList.add('is-active');
+          const timerId = Number(keyEl.getAttribute('data-timer'));
+          if (timerId) window.clearTimeout(timerId);
+          const newTimer = window.setTimeout(() => keyEl.classList.remove('is-active'), 120);
+          keyEl.setAttribute('data-timer', newTimer.toString());
+        }
+      }
+    };
+
+    window.addEventListener('pl-midi-note', onNote);
+    return () => {
+      window.removeEventListener('pl-midi-note', onNote);
+      window.clearTimeout(timer);
+    };
+  }, [id, spec?.display]);
+
   const crossLayerTargets = React.useMemo(() => {
     const targets = new Map<string, string>();
     if (activeLayerId === 'all') return targets;
@@ -521,6 +578,13 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   const onPath = trace?.nodes.has(id) ?? false;
   const hue = trace ? hueFor(trace.hueIndex) : undefined;
+  const midiStatusLine =
+    midiStatus.state === 'unavailable'
+      ? 'Web MIDI unavailable - computer keys only'
+      : midiStatus.state === 'enabled'
+        ? `MIDI: ${midiStatus.inputCount} inputs`
+        : 'MIDI: not enabled';
+  const computerKeysOn = (node.params.computer ?? 0) > 0.5;
 
   const inPins = spec.pins.filter((p) => p.direction === 'in');
   const outPins = spec.pins.filter((p) => p.direction === 'out');
@@ -683,6 +747,82 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
           >
             TRIG
           </button>
+        </div>
+      )}
+
+      {spec.display === 'midi' && (
+        <div className="pl-midi-body">
+          <div className="pl-midi-row">
+            <span ref={midiActivityRef} className="pl-midi-dot" aria-hidden="true" />
+            <span className="pl-midi-status" title={midiStatusLine}>
+              {midiStatusLine}
+            </span>
+          </div>
+          <div className="pl-midi-controls">
+            <button
+              className="pl-mini-btn nodrag"
+              disabled={midiStatus.state === 'unavailable'}
+              onClick={(e) => {
+                e.stopPropagation();
+                midiService.enable();
+              }}
+            >
+              Enable MIDI
+            </button>
+            <button
+              className={['pl-mini-btn', 'nodrag', computerKeysOn ? 'is-on' : ''].join(' ')}
+              aria-pressed={computerKeysOn}
+              onClick={(e) => {
+                e.stopPropagation();
+                useApp.getState().setParam(id, 'computer', computerKeysOn ? 0 : 1);
+              }}
+            >
+              Computer keys
+            </button>
+          </div>
+          <div className="pl-midi-keys nodrag" ref={keyboardRef}>
+            {MIDI_KEYS.map((k, index) => {
+              if (k.type === 'white') {
+                return (
+                  <div
+                    key={k.note}
+                    data-note={k.note}
+                    className="pl-midi-key pl-midi-key--white nodrag"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(
+                        new CustomEvent('pl-midi-pointer-note', {
+                          detail: { nodeId: id, note: k.note, velocity: 0.79 },
+                        }),
+                      );
+                    }}
+                  >
+                    <span className="pl-midi-key-label">{k.label}</span>
+                  </div>
+                );
+              } else {
+                const whiteCount = MIDI_KEYS.slice(0, index).filter((x) => x.type === 'white').length;
+                return (
+                  <div
+                    key={k.note}
+                    data-note={k.note}
+                    className="pl-midi-key pl-midi-key--black nodrag"
+                    style={{ left: `calc(${whiteCount * 12.5}% - 3.75%)` }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      window.dispatchEvent(
+                        new CustomEvent('pl-midi-pointer-note', {
+                          detail: { nodeId: id, note: k.note, velocity: 0.79 },
+                        }),
+                      );
+                    }}
+                  >
+                    <span className="pl-midi-key-label">{k.label}</span>
+                  </div>
+                );
+              }
+            })}
+          </div>
         </div>
       )}
 

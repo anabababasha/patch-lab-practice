@@ -4,6 +4,7 @@ import { eqService } from './eqService';
 import { meterService } from './meterService';
 import { scopeService } from './scopeService';
 import { mediaCache } from './mediaCache';
+import { midiService } from './midiService';
 import { transportService } from './transportService';
 import { triggerBus } from './triggerBus';
 import { recorderService } from './recorderService';
@@ -68,7 +69,7 @@ class AudioEngine {
     const ctx = this.ctx;
     if (!ctx) return;
 
-    for (const u of this.units.values()) {
+    for (const [id, u] of this.units.entries()) {
       try {
         u.dispose();
       } catch (e) {
@@ -86,7 +87,14 @@ class AudioEngine {
       const spec = registry[n.type];
       if (!spec) continue;
       const unit = spec.createAudio(ctx, n.id);
-      for (const p of spec.params) unit.bind(p.id, n.params[p.id] ?? p.default);
+      for (const p of spec.params) {
+        const value = n.params[p.id] ?? p.default;
+        if (!Number.isFinite(value)) {
+          console.warn('[bind] non-finite value for', n.id, p.id);
+        } else {
+          unit.bind(p.id, value);
+        }
+      }
       this.units.set(n.id, unit);
       const first = Object.values(unit.analysers)[0];
       if (first) meters.set(n.id, first);
@@ -122,10 +130,15 @@ class AudioEngine {
     
     recorderService.prune(ctx, new Set(design.nodes.map(n => n.id)));
     looperService.prune(ctx, new Set(design.nodes.map(n => n.id)));
+    midiService.prune(new Set(design.nodes.map(n => n.id)));
   }
 
   /** Live, smoothed, no rebuild. */
   setParam(nodeId: string, paramId: string, value: number) {
+    if (!Number.isFinite(value)) {
+      console.warn('[bind] non-finite value for', nodeId, paramId);
+      return;
+    }
     this.units.get(nodeId)?.bind(paramId, value);
   }
 

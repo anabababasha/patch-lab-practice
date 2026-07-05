@@ -3,6 +3,7 @@ import { clamp, dbToGain } from '../../lib/units';
 import { ensureCaptureWorklet } from '../captureWorklet';
 import { looperService } from '../looperService';
 import { mediaCache, micManager } from '../mediaCache';
+import { midiService } from '../midiService';
 import { recorderService } from '../recorderService';
 import { transportService } from '../transportService';
 import { triggerBus } from '../triggerBus';
@@ -18,6 +19,14 @@ function makeAnalyser(ctx: AudioContext, fftSize = 512): AnalyserNode {
 
 const setNow = (p: AudioParam, v: number, ctx: AudioContext) =>
   p.setTargetAtTime(v, ctx.currentTime, SMOOTH);
+
+const disconnectNode = (node: AudioNode | null | undefined) => {
+  try {
+    node?.disconnect();
+  } catch {
+    /* noop */
+  }
+};
 
 /* ================================================================ sources */
 
@@ -54,10 +63,10 @@ export function createSignalGen(ctx: AudioContext): AudioUnit {
       } catch {
         /* noop */
       }
-      osc.disconnect();
-      pitchScale.disconnect();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(osc);
+      disconnectNode(pitchScale);
+      disconnectNode(level);
+      disconnectNode(an);
     },
   };
 }
@@ -121,7 +130,7 @@ export function createNoiseGen(ctx: AudioContext): AudioUnit {
     } catch {
       /* noop */
     }
-    src?.disconnect();
+    disconnectNode(src);
     src = ctx.createBufferSource();
     src.buffer = noiseBuffer(ctx, type);
     src.loop = true;
@@ -149,9 +158,9 @@ export function createNoiseGen(ctx: AudioContext): AudioUnit {
       } catch {
         /* noop */
       }
-      src?.disconnect();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(src);
+      disconnectNode(level);
+      disconnectNode(an);
     },
   };
 }
@@ -173,7 +182,7 @@ export function createMediaPlayer(ctx: AudioContext, nodeId: string): AudioUnit 
     } catch {
       /* noop */
     }
-    src?.disconnect();
+    disconnectNode(src);
     src = null;
   };
 
@@ -218,8 +227,8 @@ export function createMediaPlayer(ctx: AudioContext, nodeId: string): AudioUnit 
     dispose() {
       disposed = true;
       stop();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(level);
+      disconnectNode(an);
     },
   };
 }
@@ -264,10 +273,10 @@ export function createMicIn(ctx: AudioContext): AudioUnit {
     },
     dispose() {
       disposed = true;
-      source?.disconnect();
-      enable.disconnect();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(source);
+      disconnectNode(enable);
+      disconnectNode(level);
+      disconnectNode(an);
     },
   };
 }
@@ -297,8 +306,8 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
     if (voice.cleaned) return;
     voice.cleaned = true;
     try { pitchScale.disconnect(voice.source.detune); } catch {}
-    try { voice.source.disconnect(); } catch {}
-    try { voice.hitGain.disconnect(); } catch {}
+    disconnectNode(voice.source);
+    disconnectNode(voice.hitGain);
     activeSet.delete(voice);
   };
 
@@ -366,9 +375,121 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
         cleanupVoice(voice);
       }
       activeSet.clear();
-      pitchScale.disconnect();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(pitchScale);
+      disconnectNode(level);
+      disconnectNode(an);
+    },
+  };
+}
+
+export function createMidiIn(ctx: AudioContext, nodeId: string): AudioUnit {
+  const pitch = ctx.createConstantSource();
+  const velocity = ctx.createConstantSource();
+  pitch.offset.value = 0;
+  velocity.offset.value = 0;
+  pitch.start();
+  velocity.start();
+
+  let deviceIndex = 0;
+  let channel = 0;
+  let octave = 0;
+  let computerKeysOn = false;
+  const heldKeys = new Set<string>();
+
+  const noteForKey: Record<string, number> = {
+    a: 60,
+    w: 61,
+    s: 62,
+    e: 63,
+    d: 64,
+    f: 65,
+    t: 66,
+    g: 67,
+    y: 68,
+    h: 69,
+    u: 70,
+    j: 71,
+    k: 72,
+  };
+
+  const isTypingTarget = () => {
+    const el = document.activeElement as HTMLElement | null;
+    const tag = el?.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!el?.isContentEditable;
+  };
+
+  const fireNote = (note: number, vel: number) => {
+    const t = ctx.currentTime;
+    const signal = (note - 60 + octave * 12) / 24;
+    pitch.offset.setTargetAtTime(signal, t, 0.003);
+    velocity.offset.setTargetAtTime(vel, t, 0.002);
+    triggerBus.emit(nodeId, 'gate', t);
+    window.dispatchEvent(new CustomEvent('pl-midi-note', { detail: { nodeId, note } }));
+  };
+
+  const onPointerNote = (e: Event) => {
+    const ce = e as CustomEvent<{ nodeId: string, note: number, velocity: number }>;
+    if (ce.detail.nodeId === nodeId) {
+      fireNote(ce.detail.note, ce.detail.velocity);
+    }
+  };
+  window.addEventListener('pl-midi-pointer-note', onPointerNote);
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.repeat || isTypingTarget()) return;
+    const key = e.key.toLowerCase();
+    const note = noteForKey[key];
+    if (note === undefined || heldKeys.has(key)) return;
+    e.preventDefault();
+    heldKeys.add(key);
+    fireNote(note, 0.79);
+  };
+
+  const onKeyUp = (e: KeyboardEvent) => {
+    heldKeys.delete(e.key.toLowerCase());
+  };
+
+  const setComputerKeys = (on: boolean) => {
+    if (computerKeysOn === on) return;
+    computerKeysOn = on;
+    if (on) {
+      window.addEventListener('keydown', onKeyDown);
+      window.addEventListener('keyup', onKeyUp);
+    } else {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      heldKeys.clear();
+    }
+  };
+
+  midiService.register(nodeId, {
+    getDevice: () => midiService.deviceIdAtIndex(deviceIndex),
+    getChannel: () => channel,
+    onNote: fireNote,
+  });
+
+  return {
+    inputs: {},
+    outputs: { pitch, velocity },
+    analysers: {},
+    bind(id, v) {
+      if (id === 'device') deviceIndex = Math.max(0, Math.round(v));
+      if (id === 'channel') channel = clamp(Math.round(v), 0, 16);
+      if (id === 'octave') octave = clamp(Math.round(v), -2, 2);
+      if (id === 'computer') setComputerKeys(v > 0.5);
+    },
+    dispose() {
+      midiService.unregister(nodeId);
+      setComputerKeys(false);
+      window.removeEventListener('pl-midi-pointer-note', onPointerNote);
+      try {
+        pitch.stop();
+      } catch {}
+      try {
+        velocity.stop();
+      } catch {}
+      disconnectNode(pitch);
+      disconnectNode(velocity);
     },
   };
 }
@@ -403,9 +524,9 @@ export function createLFO(ctx: AudioContext): AudioUnit {
       } catch {
         /* noop */
       }
-      osc.disconnect();
-      depth.disconnect();
-      an.disconnect();
+      disconnectNode(osc);
+      disconnectNode(depth);
+      disconnectNode(an);
     },
   };
 }
@@ -436,10 +557,10 @@ export function createGain(ctx: AudioContext): AudioUnit {
       if (id === 'modAmt') setNow(modScale.gain, v / 100, ctx); // ±1 lin @ 100%
     },
     dispose() {
-      g.disconnect();
-      mute.disconnect();
-      an.disconnect();
-      modScale.disconnect();
+      disconnectNode(g);
+      disconnectNode(mute);
+      disconnectNode(an);
+      disconnectNode(modScale);
     },
   };
 }
@@ -471,9 +592,9 @@ export function createFilter(ctx: AudioContext): AudioUnit {
       if (id === 'modAmt') setNow(modScale.gain, (v / 100) * 2400, ctx);
     },
     dispose() {
-      biquad.disconnect();
-      an.disconnect();
-      modScale.disconnect();
+      disconnectNode(biquad);
+      disconnectNode(an);
+      disconnectNode(modScale);
     },
   };
 }
@@ -529,11 +650,11 @@ export function createPEQ(ctx: AudioContext): AudioUnit {
       }
     },
     dispose() {
-      ls.disconnect();
-      p1.disconnect();
-      p2.disconnect();
-      hs.disconnect();
-      an.disconnect();
+      disconnectNode(ls);
+      disconnectNode(p1);
+      disconnectNode(p2);
+      disconnectNode(hs);
+      disconnectNode(an);
     },
   };
 }
@@ -564,9 +685,9 @@ export function createCompressor(ctx: AudioContext): AudioUnit {
       if (id === 'makeup') setNow(makeup.gain, dbToGain(v), ctx);
     },
     dispose() {
-      comp.disconnect();
-      makeup.disconnect();
-      an.disconnect();
+      disconnectNode(comp);
+      disconnectNode(makeup);
+      disconnectNode(an);
     },
   };
 }
@@ -674,14 +795,14 @@ export function createDelay(ctx: AudioContext): AudioUnit {
       if (id === 'modAmt') setNow(modScale.gain, (v / 100) * 0.01, ctx);
     },
     dispose() {
-      input.disconnect();
-      dry.disconnect();
-      wet.disconnect();
-      delay.disconnect();
-      feedback.disconnect();
-      sum.disconnect();
-      an.disconnect();
-      modScale.disconnect();
+      disconnectNode(input);
+      disconnectNode(dry);
+      disconnectNode(wet);
+      disconnectNode(delay);
+      disconnectNode(feedback);
+      disconnectNode(sum);
+      disconnectNode(an);
+      disconnectNode(modScale);
     },
   };
 }
@@ -741,12 +862,12 @@ export function createReverb(ctx: AudioContext): AudioUnit {
     dispose() {
       disposed = true;
       window.clearTimeout(irTimer);
-      input.disconnect();
-      dry.disconnect();
-      wet.disconnect();
-      conv.disconnect();
-      sum.disconnect();
-      an.disconnect();
+      disconnectNode(input);
+      disconnectNode(dry);
+      disconnectNode(wet);
+      disconnectNode(conv);
+      disconnectNode(sum);
+      disconnectNode(an);
     },
   };
 }
@@ -807,12 +928,12 @@ export function createDistortion(ctx: AudioContext): AudioUnit {
     dispose() {
       disposed = true;
       window.clearTimeout(curveTimer);
-      input.disconnect();
-      dry.disconnect();
-      shaper.disconnect();
-      wet.disconnect();
-      level.disconnect();
-      an.disconnect();
+      disconnectNode(input);
+      disconnectNode(dry);
+      disconnectNode(shaper);
+      disconnectNode(wet);
+      disconnectNode(level);
+      disconnectNode(an);
     },
   };
 }
@@ -835,9 +956,9 @@ export function createPanner(ctx: AudioContext): AudioUnit {
       if (id === 'modAmt') setNow(modScale.gain, v / 100, ctx);
     },
     dispose() {
-      pan.disconnect();
-      an.disconnect();
-      modScale.disconnect();
+      disconnectNode(pan);
+      disconnectNode(an);
+      disconnectNode(modScale);
     },
   };
 }
@@ -866,9 +987,9 @@ export function createMixer(ctx: AudioContext): AudioUnit {
       if (id === 'master') setNow(sum.gain, dbToGain(v), ctx);
     },
     dispose() {
-      ins.forEach((g) => g.disconnect());
-      sum.disconnect();
-      an.disconnect();
+      ins.forEach(disconnectNode);
+      disconnectNode(sum);
+      disconnectNode(an);
     },
   };
 }
@@ -902,10 +1023,10 @@ export function createRouter(ctx: AudioContext): AudioUnit {
       }
     },
     dispose() {
-      ins.forEach((g) => g.disconnect());
-      outs.forEach((g) => g.disconnect());
-      ans.forEach((a) => a.disconnect());
-      cross.forEach((row) => row.forEach((x) => x.disconnect()));
+      ins.forEach(disconnectNode);
+      outs.forEach(disconnectNode);
+      ans.forEach(disconnectNode);
+      cross.forEach((row) => row.forEach(disconnectNode));
     },
   };
 }
@@ -928,22 +1049,19 @@ export function createAnalyzer(ctx: AudioContext): AudioUnit {
       /* display-only params are read by the scope service */
     },
     dispose() {
-      input.disconnect();
-      an.disconnect();
+      disconnectNode(input);
+      disconnectNode(an);
     },
   };
 }
 
 export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
   const input = ctx.createGain();
-  const thruGain = ctx.createGain();
   const loopGain = ctx.createGain();
   const an = makeAnalyser(ctx);
   const speeds = [0.5, 1, 2];
   let disposed = false;
   
-  input.connect(thruGain);
-  thruGain.connect(an);
   loopGain.connect(an);
 
   looperService.ensureEntry(ctx, nodeId).then((entry) => {
@@ -957,7 +1075,6 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
     outputs: { out: an },
     analysers: { out: an },
     bind(paramId: string, value: number) {
-      if (paramId === 'thruLevel') thruGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
       if (paramId === 'loopLevel') loopGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
       if (paramId === 'sync') looperService.setSync(nodeId, value > 0.5);
       if (paramId === 'speed') looperService.setSpeed(nodeId, speeds[clamp(Math.round(value), 0, speeds.length - 1)]);
@@ -965,15 +1082,12 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
     dispose() {
       disposed = true;
       try {
-        const tap = looperService.getTap(ctx, nodeId);
-        if (tap) input.disconnect(tap.node);
         const bus = looperService.getPlaybackBus(ctx, nodeId);
-        if (bus) bus.disconnect(loopGain);
+        disconnectNode(bus);
       } catch {}
-      input.disconnect();
-      thruGain.disconnect();
-      loopGain.disconnect();
-      an.disconnect();
+      disconnectNode(input);
+      disconnectNode(loopGain);
+      disconnectNode(an);
     }
   };
 }
@@ -1001,16 +1115,8 @@ export function createRecorder(ctx: AudioContext, nodeId: string): AudioUnit {
     bind() {},
     dispose() {
       disposed = true;
-      try {
-        const dest = recorderService.getDest(ctx, nodeId);
-        input.disconnect(dest);
-      } catch {}
-      try {
-        const tap = recorderService.getTap(ctx, nodeId);
-        input.disconnect(tap.node);
-      } catch {}
-      input.disconnect(an);
-      an.disconnect();
+      disconnectNode(input);
+      disconnectNode(an);
     },
   };
 }
@@ -1040,9 +1146,9 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
       if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
     },
     dispose() {
-      level.disconnect();
-      an.disconnect();
-      limiter.disconnect();
+      disconnectNode(level);
+      disconnectNode(an);
+      disconnectNode(limiter);
     },
   };
 }
@@ -1099,9 +1205,9 @@ export function createEnvelope(ctx: AudioContext): AudioUnit {
     },
     dispose() {
       try { src.stop(); } catch {}
-      src.disconnect();
-      env.disconnect();
-      an.disconnect();
+      disconnectNode(src);
+      disconnectNode(env);
+      disconnectNode(an);
     },
   };
 }

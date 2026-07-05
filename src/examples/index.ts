@@ -179,4 +179,24 @@ export const examples = [
       w(mixer, 'out', master, 'in');
     }),
   },
+  {
+    id: 'playable_synth',
+    name: 'Playable Synth',
+    blurb: "Press A-K on your keyboard. That's an instrument.",
+    build: () => buildExample((n, w) => {
+      const midi = n('midi_in', 0, 0);
+      const env = n('envelope', 300, 0, { attack: 2, decay: 400 });
+      const sig = n('signal_gen', 300, 150, { wave: 2, freq: 440, level: -8, pitchAmt: 2400 });
+      const filter = n('filter', 600, 150, { type: 0, freq: 1800, q: 2 });
+      const gain = n('gain', 900, 150, { gain: -60, modAmt: 100 });
+      const master = n('master_out', 1200, 150, { level: -6 });
+
+      w(midi, 'gate', env, 'trig');
+      w(env, 'out', gain, 'mod');
+      w(midi, 'pitch', sig, 'pitch');
+      w(sig, 'out', filter, 'in');
+      w(filter, 'out', gain, 'in');
+      w(gain, 'out', master, 'in');
+    }),
+  },
 ];

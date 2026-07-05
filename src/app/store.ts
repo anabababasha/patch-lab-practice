@@ -8,6 +8,7 @@ import { transportService } from '../audio/transportService';
 import { recorderService } from '../audio/recorderService';
 import { looperService } from '../audio/looperService';
 import { micManager } from '../audio/mediaCache';
+import { midiService } from '../audio/midiService';
 
 const STORAGE_KEY = 'patchlab.design.v1';
 const HISTORY_MAX = 50;
@@ -987,3 +988,4 @@ export const useApp = create<AppState>((set, get) => {
 engine.onStateChange = (running) => useApp.getState().setAudioRunning(running);
 micManager.onDenied = (msg) => useApp.getState().showToast(msg);
 recorderService.onToast = (msg) => useApp.getState().showToast(msg);
+midiService.onToast = (msg) => useApp.getState().showToast(msg);

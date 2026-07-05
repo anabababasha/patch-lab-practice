@@ -78,6 +78,19 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
       }
     }
 
+    if (node.type === 'midi_in') {
+      const gateConnected = (outWires.get(`${node.id}:gate`)?.length || 0) > 0;
+      const pitchConnected = (outWires.get(`${node.id}:pitch`)?.length || 0) > 0;
+      if (!gateConnected && !pitchConnected) {
+        issues.push({
+          id: `midi-in-unconnected-${node.id}`,
+          severity: 'info',
+          message: `${node.label} isn't wired - Gate fires envelopes, Pitch tracks notes.`,
+          nodeId: node.id,
+        });
+      }
+    }
+
     // Rule 3: node (except master_out) whose audio outputs all have zero wires
     if (node.type !== 'master_out') {
       const audioOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'audio');
@@ -220,7 +233,7 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
     }
 
     // Rule 8: Node with trigger output but zero wires
-    if (node.type !== 'step_seq') {
+    if (node.type !== 'step_seq' && node.type !== 'midi_in') {
       const triggerOuts = spec.pins.filter((p) => p.direction === 'out' && p.kind === 'trigger');
       for (const pin of triggerOuts) {
         const key = `${node.id}:${pin.id}`;

@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useApp } from '../app/store';
+import { midiService } from '../audio/midiService';
 import { registry } from '../components/registry';
 import type { ParamSpec } from '../lib/types';
 import {
@@ -19,14 +21,46 @@ function ParamControl({
   value: number;
 }) {
   const setParam = useApp((s) => s.setParam);
+  const [, setOptionVersion] = useState(0);
+  const [stagedValue, setStagedValue] = useState<string | null>(null);
 
-  if (spec.kind === 'select' && spec.options) {
-    const idx = Math.round(value);
+  useEffect(() => {
+    if (spec.dynamicOptions !== 'midiInputs') return;
+    return midiService.subscribe(() => setOptionVersion((v) => v + 1));
+  }, [spec.dynamicOptions]);
+
+  const options =
+    spec.dynamicOptions === 'midiInputs'
+      ? midiService.getDeviceOptions()
+      : spec.options;
+
+  if (spec.kind === 'select' && options) {
+    const idx = clamp(Math.round(value), 0, Math.max(0, options.length - 1));
+    if (spec.selectStyle === 'dropdown' || spec.dynamicOptions) {
+      return (
+        <div className="pl-param">
+          <span className="pl-param__label">{spec.label}</span>
+          <select
+            className="pl-param__number pl-param__select"
+            value={idx}
+            onChange={(e) => setParam(nodeId, spec.id, Number(e.target.value))}
+            aria-label={spec.label}
+          >
+            {options.map((opt, i) => (
+              <option key={`${opt}-${i}`} value={i}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
     return (
       <div className="pl-param">
         <span className="pl-param__label">{spec.label}</span>
         <div className="pl-segment" role="radiogroup" aria-label={spec.label}>
-          {spec.options.map((opt, i) => (
+          {options.map((opt, i) => (
             <button
               key={opt}
               className={i === idx ? 'is-on' : ''}
@@ -86,14 +120,29 @@ function ParamControl({
       />
       <input
         className="pl-param__number"
-        type="number"
-        min={spec.min}
-        max={spec.max}
-        step={spec.step}
-        value={Number(value.toFixed(2))}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          if (Number.isFinite(v)) commit(v);
+        type="text"
+        value={stagedValue !== null ? stagedValue : Number(value.toFixed(2)).toString()}
+        onChange={(e) => setStagedValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            setStagedValue(null);
+            e.currentTarget.blur();
+          } else {
+            e.stopPropagation();
+          }
+        }}
+        onBlur={() => {
+          if (stagedValue !== null) {
+            const v = Number(stagedValue);
+            if (stagedValue.trim() === '' || !Number.isFinite(v)) {
+              setStagedValue(null);
+            } else {
+              commit(v);
+              setStagedValue(null);
+            }
+          }
         }}
         aria-label={`${spec.label} value`}
       />

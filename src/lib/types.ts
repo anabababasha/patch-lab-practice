@@ -20,6 +20,8 @@ export interface ParamSpec {
   kind?: 'slider' | 'toggle' | 'select';
   /** for kind 'select': value is the option index */
   options?: string[];
+  dynamicOptions?: 'midiInputs';
+  selectStyle?: 'segment' | 'dropdown';
   hidden?: boolean;
 }
 
@@ -67,7 +69,7 @@ export interface ComponentSpec {
     }>;
   };
   /** special node body renderers */
-  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper' | 'eq';
+  display?: 'scope' | 'media' | 'mic' | 'trigger' | 'sequencer' | 'recorder' | 'looper' | 'eq' | 'midi';
   createAudio(ctx: AudioContext, nodeId: string): AudioUnit;
 }
 

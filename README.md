@@ -29,6 +29,17 @@ Build 3 adds trigger signals (dotted wires) for real-time events. Try this kick 
 
 Tapping the pad should produce a clean, punchy kick drum per tap.
 
+## Playing notes
+
+Add **MIDI In** from Sources to play PatchLab as an instrument. Wire **Gate** to an Envelope Trig, **Pitch** to Signal Generator or Sampler Pitch with Pitch Mod at `2400`, and optionally **Velocity** to a control input for dynamics.
+
+Browser support:
+
+- Chrome, Edge, Firefox: hardware MIDI plus computer keys.
+- Safari and iOS: computer keys only; Web MIDI is unavailable.
+
+Computer key map, C to C: `A W S E D F T G Y H U J K` = `C C# D D# E F F# G G# A A# B C`. The MIDI In **Octave** parameter transposes both hardware MIDI and computer keys.
+
 ## Pattern library
 
 Build 4 adds a global transport (BPM + Play/Stop) and a Step Sequencer. The step sequencer uses a sample-accurate lookahead scheduler to emit triggers in perfect time, turning envelopes into a drum machine. 
@@ -52,7 +63,7 @@ PatchLab allows you to capture your performances directly to an audio file. Add 
 
 ## Looping
 
-The **Looper** node allows you to capture a performance through it, loop it instantly, and layer live playing over it. When **Bar sync** is on and the transport is playing, recording actions automatically quantize to the transport grid so your loops lock perfectly in time with the drum machine.
+The **Looper** node allows you to capture a performance through it, loop it instantly, and layer live playing over it. Its Output carries loop playback only; when the Looper is empty or stopped, Output is silent. Patch the dry signal in parallel if you want live monitoring. When **Bar sync** is on and the transport is playing, recording actions automatically quantize to the transport grid so your loops lock perfectly in time with the drum machine.
 
 When a loop is captured, the Looper opens a waveform window. Drag either edge to trim the live loop region; synced loops snap to the 16th-note grid first, then to nearby zero-crossings to keep seams clean. The Looper can also Normalize quiet captures, Reverse the buffer, and switch Speed between half-time, normal, and double-time tape-style playback while the loop keeps running.
 

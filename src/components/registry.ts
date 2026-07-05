@@ -9,6 +9,7 @@ import {
   createLFO,
   createMasterOut,
   createMediaPlayer,
+  createMidiIn,
   createMicIn,
   createRecorder,
   createSampler,
@@ -125,6 +126,16 @@ const select = (
   default: def,
   kind: 'select',
   options,
+});
+
+const dropdown = (
+  id: string,
+  label: string,
+  options: string[],
+  def = 0,
+): ParamSpec => ({
+  ...select(id, label, options, def),
+  selectStyle: 'dropdown',
 });
 
 /* ------------------------------------------------------------ registry */
@@ -280,6 +291,50 @@ export const registry: Record<string, ComponentSpec> = {
     },
     display: 'media',
     createAudio: createSampler,
+  },
+
+  midi_in: {
+    type: 'midi_in',
+    name: 'MIDI In',
+    category: 'source',
+    pins: [
+      tOut('gate', 'Gate'),
+      cOut('pitch', 'Pitch'),
+      cOut('velocity', 'Velocity'),
+    ],
+    params: [
+      {
+        id: 'device',
+        label: 'Device',
+        unit: '',
+        min: 0,
+        max: 64,
+        step: 1,
+        default: 0,
+        kind: 'select',
+        options: ['All'],
+        dynamicOptions: 'midiInputs',
+        selectStyle: 'dropdown',
+      },
+      dropdown('channel', 'Channel', ['Omni', ...Array.from({ length: 16 }, (_, i) => `${i + 1}`)]),
+      { id: 'octave', label: 'Octave', unit: '', min: -2, max: 2, step: 1, default: 0 },
+      { id: 'computer', label: 'Computer keys', unit: '', min: 0, max: 1, step: 1, default: 0, kind: 'toggle', hidden: true },
+    ],
+    internalRouting: {},
+    help: {
+      summary: 'Play notes from a MIDI keyboard, your computer keys, or the clickable on-node keyboard - Pitch and Velocity as control signals, Gate as a trigger.',
+      tips: [
+        'Gate -> Envelope Trig, Pitch -> Signal Generator or Sampler Pitch: a playable voice.',
+        'No MIDI hardware? The A-K row is a piano; toggle Computer keys.',
+        'Safari/iOS have no Web MIDI - computer keys are the instrument there.',
+      ],
+      flows: [
+        { title: 'Playable synth', chain: [{label:'MIDI In'}, {label:'Envelope Trig', kind:'trigger'}, {label:'Gain Mod', kind:'control'}] },
+        { title: 'Note tracking', chain: [{label:'MIDI In Pitch'}, {label:'Signal Gen Pitch', kind:'control'}] },
+      ],
+    },
+    display: 'midi',
+    createAudio: createMidiIn,
   },
 
   /* ---------------------------------------------------- modulation */
@@ -712,23 +767,23 @@ export const registry: Record<string, ComponentSpec> = {
     pins: [aIn('in', 'Input'), aOut('out', 'Output')],
     params: [
       db('loopLevel', 'Loop', -60, 6, 0),
-      db('thruLevel', 'Thru', -60, 6, 0),
+      { ...db('thruLevel', 'Thru', -60, 6, 0), hidden: true },
       toggle('sync', 'Bar sync', 1),
       select('speed', 'Speed', ['\u00bd\u00d7', '1\u00d7', '2\u00d7'], 1),
     ],
-    internalRouting: { in: ['out'] },
+    internalRouting: { in: [] },
     help: {
-      summary: 'Captures what flows through it and loops it — layer a performance in real time.',
+      summary: 'Captures what flows through it and plays back the loop. Output is the loop only - patch your dry signal in parallel.',
       tips: [
         'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
-        'Thru and Loop levels let you fade between live playing and the loop.',
+        'Output is silent while empty or stopped; fan out the dry source if you want live monitoring.',
         'Drag the edges of the waveform to trim the loop - edges snap to zero-crossings so it never clicks.',
         '\u00bd\u00d7 is an octave down, tape-style.',
       ],
       flows: [
         {
           title: 'Live layering',
-          chain: [{ label: 'Sampler / Synth' }, { label: 'Looper', kind: 'audio' }, { label: 'Master Out', kind: 'audio' }],
+          chain: [{ label: 'Sampler / Synth' }, { label: 'Looper loop', kind: 'audio' }, { label: 'Master Out', kind: 'audio' }],
         },
       ],
     },
@@ -783,7 +838,7 @@ export const paletteOrder: Array<{
   {
     category: 'source',
     label: 'Sources',
-    types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in', 'sampler'],
+    types: ['signal_gen', 'noise_gen', 'media_player', 'mic_in', 'sampler', 'midi_in'],
   },
   { category: 'mod', label: 'Modulation', types: ['lfo', 'envelope', 'trigger_pad', 'step_seq'] },
   {

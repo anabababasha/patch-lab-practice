@@ -106,7 +106,11 @@ export class CaptureTap {
   }
 
   dispose() {
-    this.node.disconnect();
+    try {
+      this.node.disconnect();
+    } catch {
+      /* noop */
+    }
     this.node.port.close();
   }
 }

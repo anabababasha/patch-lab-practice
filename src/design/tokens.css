@@ -523,6 +523,17 @@ body {
   border-color: var(--border-active);
 }
 
+.pl-mini-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pl-mini-btn.is-on {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+  background: var(--surface);
+}
+
 .pl-node__file {
   font: 450 11px var(--font-data);
   color: var(--text-secondary);
@@ -647,6 +658,13 @@ body {
   font: 500 12px var(--font-data);
   font-variant-numeric: tabular-nums;
   padding: 4px 6px;
+}
+
+.pl-param__select {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-ui);
 }
 
 .pl-param__value {
@@ -916,6 +934,47 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* --------------------------------------------------------------- MIDI In */
+
+.pl-midi-body {
+  padding: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pl-midi-row,
+.pl-midi-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pl-midi-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font: 500 10.5px var(--font-data);
+}
+
+.pl-midi-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-disabled);
+  flex: none;
+  transition: background 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+.pl-midi-dot.is-active {
+  background: var(--signal-1);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--signal-1) 45%, transparent);
 }
 
 /* ----------------------------------------------- react-flow chrome */
@@ -1219,4 +1278,57 @@ body {
   .pl-edge-glow {
     animation: none;
   }
+}
+
+/* --------------------------------------------------- midi keyboard */
+.pl-midi-keys {
+  position: relative;
+  height: 60px;
+  width: 100%;
+  display: flex;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pl-midi-key--white {
+  flex: 1;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  color: var(--text-disabled);
+  font: 500 10px var(--font-data);
+  cursor: pointer;
+}
+.pl-midi-key--white:last-child {
+  border-right: none;
+}
+
+.pl-midi-key--black {
+  position: absolute;
+  width: calc(100% / 8 * 0.6);
+  height: 60%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+  top: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  color: var(--text-disabled);
+  font: 500 10px var(--font-data);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.pl-midi-key.is-active {
+  background: var(--text-secondary);
+  color: var(--canvas);
 }
