@@ -154,9 +154,13 @@ class LooperService {
     this.desiredSpeed.set(nodeId, speed);
     const entry = this.entries.get(nodeId);
     if (!entry) return;
+    const time = entry.ctx.currentTime;
+    const offset = entry.source ? this.getPlaybackOffset(entry, time) : entry.regionStart;
     entry.speed = speed;
     if (entry.source) {
-      entry.source.playbackRate.setTargetAtTime(speed, entry.ctx.currentTime, 0.02);
+      entry.source.playbackRate.cancelScheduledValues(time);
+      entry.source.playbackRate.setValueAtTime(speed, time);
+      this.setPlaybackAnchor(entry, offset, time);
     }
   }
 
@@ -165,6 +169,10 @@ class LooperService {
     if (!entry?.buffer) return;
 
     const duration = entry.buffer.duration;
+    const wasPlaying = !!entry.source;
+    const playbackOffset = wasPlaying
+      ? this.getPlaybackOffset(entry, entry.ctx.currentTime)
+      : entry.regionStart;
     let start = clamp(startS, 0, Math.max(0, duration - MIN_REGION_SECONDS));
     let end = clamp(endS, MIN_REGION_SECONDS, duration);
     const movingStart =
@@ -195,6 +203,7 @@ class LooperService {
     entry.regionStart = clamp(start, 0, duration);
     entry.regionEnd = clamp(end, entry.regionStart + MIN_REGION_SECONDS, duration);
     this.applySourceRegion(entry);
+    if (wasPlaying) this.setPlaybackAnchor(entry, playbackOffset, entry.ctx.currentTime);
   }
 
   normalize(nodeId: string) {
@@ -215,16 +224,14 @@ class LooperService {
     }
 
     entry.bufferVersion++;
-    const peakAfter = this.measurePeak(entry.buffer);
-    console.debug('[looper] normalize', {
-      nodeId,
-      peakBefore: peak,
-      peakAfter,
-      restarted: wasPlaying,
-      connectTarget: wasPlaying ? 'entry.bus' : 'not playing',
-    });
     if (wasPlaying) this.startPlayback(entry.ctx, entry, entry.ctx.currentTime, restartOffset);
     this.notify(nodeId, entry);
+  }
+
+  reattachPlayback(ctx: AudioContext, nodeId: string) {
+    const entry = this.getM(ctx).get(nodeId);
+    if (!entry?.buffer || entry.state !== 'playing' || !entry.source) return;
+    this.startPlayback(ctx, entry, ctx.currentTime, this.getPlaybackOffset(entry, ctx.currentTime));
   }
 
   reverse(nodeId: string) {
@@ -409,8 +416,7 @@ class LooperService {
         ? offset
         : entry.regionStart;
     entry.source.start(t, startOffset);
-    entry.sourceStartTime =
-      t - (startOffset - entry.regionStart) / Math.max(0.0001, entry.speed);
+    this.setPlaybackAnchor(entry, startOffset, t);
   }
 
   private stopPlayback(ctx: AudioContext, entry: LooperEntry, time: number) {
@@ -472,6 +478,13 @@ class LooperService {
     const regionLength = entry.regionEnd - entry.regionStart;
     const elapsed = Math.max(0, time - entry.sourceStartTime) * entry.speed;
     return entry.regionStart + (elapsed % regionLength);
+  }
+
+  private setPlaybackAnchor(entry: LooperEntry, offset: number, time: number) {
+    const maxOffset = Math.max(entry.regionStart, entry.regionEnd - Number.EPSILON);
+    const safeOffset = clamp(offset, entry.regionStart, maxOffset);
+    entry.sourceStartTime =
+      time - (safeOffset - entry.regionStart) / Math.max(0.0001, entry.speed);
   }
 
   private measurePeak(buffer: AudioBuffer) {

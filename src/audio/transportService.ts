@@ -30,11 +30,26 @@ export const transportService = new (class {
 
   stop() {
     this.running = false;
+    this.tickIndex = 0;
+    if (this.ctx) this.nextTickTime = this.ctx.currentTime + 0.06;
     if (this.intervalId !== null) {
       window.clearTimeout(this.intervalId);
       this.intervalId = null;
     }
     for (const cb of this.stopSubscribers) cb();
+  }
+
+  getGlobalTick() {
+    return this.tickIndex;
+  }
+
+  getBarBeat(tickIndex = this.tickIndex) {
+    const beatTicks = 4;
+    const barTicks = beatTicks * 4;
+    const bar = Math.floor(tickIndex / barTicks) + 1;
+    const beat = Math.floor((tickIndex % barTicks) / beatTicks) + 1;
+    const sixteenth = (tickIndex % beatTicks) + 1;
+    return { bar, beat, sixteenth };
   }
 
   registerSequencer(nodeId: string, cb: (time: number, tickIndex: number) => void) {

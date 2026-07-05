@@ -696,13 +696,11 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
   const pattern = Array.from({ length: 4 }, () => new Array(16).fill(0));
   let steps = 16;
   let rateDiv = 2; // 1/8 default
-  let pos = 0;
   let muted = false;
 
   const onTick = (time: number, tickIndex: number) => {
     if (tickIndex % rateDiv !== 0) return;
-    const step = pos % steps;
-    pos = (step + 1) % steps;
+    const step = Math.floor(tickIndex / rateDiv) % steps;
     
     if (!muted) {
       for (let row = 0; row < 4; row++) {
@@ -720,7 +718,6 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
   };
   
   const onStop = () => {
-    pos = 0;
     window.dispatchEvent(new CustomEvent('pl-seq-stop', { detail: { nodeId } }));
   };
 
@@ -735,7 +732,6 @@ export function createStepSequencer(ctx: AudioContext, nodeId: string): AudioUni
     bind(id, v) {
       if (id === 'steps') {
         steps = Math.max(1, Math.min(16, Math.round(v)));
-        pos = pos % steps;
       }
       else if (id === 'rate') rateDiv = Math.round(v) === 0 ? 2 : 1;
       else if (id === 'muted') muted = v > 0.5;
@@ -1079,6 +1075,7 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
     if (disposed) return;
     input.connect(entry.tap.node);
     entry.bus.connect(loopGain);
+    looperService.reattachPlayback(ctx, nodeId);
   });
 
   return {
