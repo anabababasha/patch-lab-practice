@@ -886,6 +886,145 @@ export function createGrainDelay(ctx: AudioContext): AudioUnit {
   };
 }
 
+export function createBufferRepeater(ctx: AudioContext, nodeId: string): AudioUnit {
+  const input = ctx.createGain();
+  const dry = ctx.createGain();
+  const wet = ctx.createGain();
+  const sum = ctx.createGain();
+  const an = makeAnalyser(ctx);
+
+  const worklet = new AudioWorkletNode(ctx, 'pl-bufferrepeat', {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    channelCount: 2,
+    outputChannelCount: [2],
+  });
+
+  input.connect(dry);
+  input.connect(worklet);
+  worklet.connect(wet);
+  dry.connect(sum);
+  wet.connect(sum);
+  sum.connect(an);
+
+  // initial values set directly — ramping from createGain's default 1 doubles the
+  // signal (dry leg + worklet passthrough) for the first ~50ms of the node's life
+  dry.gain.value = 0;
+  wet.gain.value = 1;
+
+  let bypassOn = false;
+
+  const updateMix = () => {
+    if (bypassOn) {
+      dry.gain.setTargetAtTime(1, ctx.currentTime, 0.01);
+      wet.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
+    } else {
+      dry.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
+      wet.gain.setTargetAtTime(1, ctx.currentTime, 0.01);
+    }
+  };
+
+  let intervalOpt = 2; // ['1/4', '1/2', '1 bar', '2 bars', '4 bars'] -> [4, 8, 16, 32, 64]
+  let offset = 0;
+  let chance = 0;
+  let gridIdx = 2;
+  let variation = 0;
+  let gate = 4;
+  let pitch = 0;
+  let pitchDecay = 0;
+  let decay = 0;
+  let mode = 1;
+
+  const interval16 = [4, 8, 16, 32, 64];
+
+  const triggerBurst = (when: number, snap: boolean) => {
+    const sixteenthFrames = (60 / transportService.bpm / 4) * ctx.sampleRate;
+    worklet.port.postMessage({
+      type: 'burst',
+      when,
+      sixteenthFrames,
+      gridIdx,
+      gateSixteenths: gate,
+      semis: pitch,
+      semisDecay01: pitchDecay / 100,
+      gainDecay01: Math.max(0, 1 - decay / 100),
+      mode,
+      variation,
+      snap,
+    });
+  };
+
+  const onTick = (time: number, tickIndex: number) => {
+    if (chance > 0 && (tickIndex - offset) % interval16[intervalOpt] === 0) {
+      if (Math.random() * 100 < chance) {
+        triggerBurst(time, false);
+      }
+    }
+  };
+
+  transportService.registerSequencer(`bufrep_${nodeId}`, onTick);
+
+  return {
+    inputs: { in: input },
+    outputs: { out: an },
+    analysers: { out: an },
+    triggerIns: {
+      trig: (time) => triggerBurst(time ?? ctx.currentTime, true),
+    },
+    holdRepeat: (on) => {
+      if (on) {
+        const sixteenthFrames = (60 / transportService.bpm / 4) * ctx.sampleRate;
+        worklet.port.postMessage({
+          type: 'hold',
+          when: ctx.currentTime,
+          sixteenthFrames,
+          gridIdx,
+          gateSixteenths: gate,
+          semis: pitch,
+          semisDecay01: pitchDecay / 100,
+          gainDecay01: Math.max(0, 1 - decay / 100),
+          mode,
+          variation,
+          snap: true,
+        });
+      } else {
+        worklet.port.postMessage({ type: 'release' });
+      }
+    },
+    bind(id, v) {
+      if (id === 'interval') intervalOpt = clamp(Math.round(v), 0, 4);
+      else if (id === 'offset') offset = Math.round(v);
+      else if (id === 'chance') chance = v;
+      else if (id === 'grid') gridIdx = clamp(Math.round(v), 0, 6);
+      else if (id === 'variation') variation = Math.round(v);
+      else if (id === 'gate') gate = Math.round(v);
+      else if (id === 'pitch') pitch = Math.round(v);
+      else if (id === 'pitchDecay') pitchDecay = v;
+      else if (id === 'decay') decay = v;
+      else if (id === 'mode') {
+        mode = Math.round(v);
+        // Gate mode mutes dry OUTSIDE bursts too — the worklet must know immediately,
+        // not on the next burst
+        worklet.port.postMessage({ type: 'mode', mode });
+      }
+      else if (id === 'bypass') {
+        bypassOn = v > 0.5;
+        updateMix();
+      }
+    },
+    dispose() {
+      transportService.unregister(`bufrep_${nodeId}`);
+      disconnectNode(input);
+      disconnectNode(dry);
+      disconnectNode(wet);
+      disconnectNode(sum);
+      disconnectNode(an);
+      try { worklet.disconnect(); } catch {}
+      worklet.port.close();
+    },
+  };
+}
+
 /* synthesized exponential-decay impulse response */
 function makeIR(ctx: AudioContext, seconds: number): AudioBuffer {
   const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));

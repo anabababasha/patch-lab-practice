@@ -11,6 +11,7 @@ import { recorderService } from './recorderService';
 import { looperService } from './looperService';
 import { ensureCaptureWorklet } from './captureWorklet';
 import { ensureGrainWorklet } from './grainWorklet';
+import { ensureBufferRepeaterWorklet } from './bufferRepeaterWorklet';
 import { resolveParamValue } from './sync';
 
 /**
@@ -55,6 +56,7 @@ class AudioEngine {
     await ctx.resume();
     await ensureCaptureWorklet(ctx);
     await ensureGrainWorklet(ctx);
+    await ensureBufferRepeaterWorklet(ctx);
     this.rebuild(design);
     return ctx.state === 'running';
   }
@@ -358,6 +360,13 @@ class AudioEngine {
     const handlers = this.triggerMap.get(`${nodeId}:${pinId}`);
     if (handlers) {
       for (const h of handlers) h(time);
+    }
+  }
+
+  holdRepeat(nodeId: string, on: boolean) {
+    const unit = this.units.get(nodeId);
+    if (unit && unit.holdRepeat) {
+      unit.holdRepeat(on);
     }
   }
 

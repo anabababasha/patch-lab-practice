@@ -93,11 +93,12 @@ test.describe('Grain Delay DSP Worklet', () => {
         
         const osc = ctx.createOscillator();
         const env = ctx.createGain();
-        // tone sounds until 0.6s — so at freeze time (0.45s) the grain read-window
-        // (time = 100ms behind the head) contains TONE, not silence
+        // tone sounds until 1.0s — freeze fires at 0.45s, so even if the port message
+        // lands a few hundred ms late (delivery to the audio thread is async), the
+        // frozen read-window still contains TONE, not silence
         env.gain.value = 1;
-        env.gain.setValueAtTime(1, 0.6);
-        env.gain.linearRampToValueAtTime(0, 0.61);
+        env.gain.setValueAtTime(1, 1.0);
+        env.gain.linearRampToValueAtTime(0, 1.01);
 
         osc.connect(env);
         env.connect(gd.inputs.in);
@@ -105,8 +106,10 @@ test.describe('Grain Delay DSP Worklet', () => {
         osc.start();
 
         if (frozen) {
-          ctx.suspend(0.45).then(() => {
+          ctx.suspend(0.45).then(async () => {
             gd.bind('freeze', 1);
+            // let the message queue drain to the (idle, suspended) audio thread
+            await new Promise((r) => setTimeout(r, 25));
             ctx.resume();
           });
         }
@@ -234,5 +237,222 @@ test.describe('Grain Delay DSP Worklet', () => {
     
     expect(result.hasNaN).toBe(false);
     expect(result.maxAbs).toBeLessThanOrEqual(1.05);
+  });
+});
+
+test.describe('Buffer Repeater DSP Worklet', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(
+      () => (window as unknown as Record<string, unknown>).__plWorkletTest !== undefined,
+    );
+  });
+
+  test('Identity', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 1, sr);
+      await ensureBufferRepeaterWorklet(ctx);
+      const br = createBufferRepeater(ctx, 'br1');
+      br.bind('chance', 0);
+      
+      const osc = ctx.createOscillator();
+      const am = ctx.createGain();
+      const mod = ctx.createOscillator();
+      mod.frequency.value = 10;
+      mod.connect(am.gain);
+      osc.connect(am);
+      am.connect(br.inputs.in);
+      
+      const pureDry = ctx.createGain();
+      am.connect(pureDry);
+      
+      const merger = ctx.createChannelMerger(2);
+      br.outputs.out.connect(merger, 0, 0);
+      pureDry.connect(merger, 0, 1);
+      merger.connect(ctx.destination);
+      
+      osc.start();
+      mod.start();
+      
+      const buffer = await ctx.startRendering();
+      const outBR = buffer.getChannelData(0);
+      const outDry = buffer.getChannelData(1);
+      
+      let maxDiff = 0;
+      for (let i = 0; i < outBR.length; i++) {
+        const diff = Math.abs(outBR[i] - outDry[i]);
+        if (diff > maxDiff) maxDiff = diff;
+      }
+      return maxDiff;
+    });
+    
+    expect(result).toBeLessThan(0.01);
+  });
+
+  test('Burst repeats', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 1, sr);
+      await ensureBufferRepeaterWorklet(ctx);
+      const br = createBufferRepeater(ctx, 'br1');
+      br.bind('mode', 1); // Insert
+      
+      br.bind('gate', 3); // 3 sixteenths @ default 100 BPM = 0.45s burst
+
+      // transport singleton defaults to 100 BPM -> sixteenth = 0.15s = grid (idx 2).
+      // trig at 0.45s lies exactly ON a grid boundary (3 * 0.15), so snap keeps F0 = 0.45s.
+      // Slot layout: capture [0.45,0.60) | rep1 [0.60,0.75) | rep2 [0.75,0.90) | live after 0.90.
+      const osc = ctx.createOscillator();
+      osc.frequency.setValueAtTime(440, 0);
+      osc.frequency.setValueAtTime(880, 0.62); // step INSIDE rep1 — repeats must replay 440, live is 880
+
+      osc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      osc.start();
+
+      // suspend guarantees port-message delivery before the render outruns the queue
+      ctx.suspend(0.1).then(() => {
+        br.triggerIns!.trig!(0.45);
+        ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const dataL = buffer.getChannelData(0);
+
+      const getZeroCrossings = (startSec: number, endSec: number) => {
+        const start = Math.floor(startSec * sr);
+        const end = Math.floor(endSec * sr);
+        let zc = 0;
+        for (let i = start + 1; i < end; i++) {
+          if (dataL[i-1] < 0 && dataL[i] >= 0) zc++;
+        }
+        return zc;
+      };
+
+      const zcCapture = getZeroCrossings(0.45, 0.6);   // 440 Hz x 0.15s ~ 66
+      const zcRep1 = getZeroCrossings(0.6, 0.75);      // replay of capture ~ 66 (live would be ~123)
+      const zcRep2 = getZeroCrossings(0.75, 0.9);      // replay ~ 66 (live would be ~132)
+      const zcLiveLater = getZeroCrossings(0.9, 1.0);  // burst over: live 880 Hz x 0.1s ~ 88
+
+      let hasNaN = false;
+      for (let i = 0; i < dataL.length; i++) {
+        if (Number.isNaN(dataL[i])) hasNaN = true;
+      }
+
+      return { zcCapture, zcRep1, zcRep2, zcLiveLater, hasNaN };
+    });
+
+    expect(result.hasNaN).toBe(false);
+    expect(result.zcCapture).toBeGreaterThan(58);
+    expect(result.zcCapture).toBeLessThan(74);
+    expect(result.zcRep1).toBeGreaterThan(58);
+    expect(result.zcRep1).toBeLessThan(74);
+    expect(result.zcRep2).toBeGreaterThan(58);
+    expect(result.zcRep2).toBeLessThan(74);
+    expect(result.zcLiveLater).toBeGreaterThan(80);
+    expect(result.zcLiveLater).toBeLessThan(96);
+  });
+
+  test('Hold/release', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 2, sr);
+      await ensureBufferRepeaterWorklet(ctx);
+      const br = createBufferRepeater(ctx, 'br1');
+      br.bind('mode', 1); // Insert: dry passes when idle, repeats replace dry while held
+
+      // input tone STOPS at 0.7s — so anything audible after 0.8s can ONLY be held repeats
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      env.gain.value = 1;
+      env.gain.setValueAtTime(1, 0.7);
+      env.gain.linearRampToValueAtTime(0, 0.71);
+
+      osc.connect(env);
+      env.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      osc.start();
+
+      ctx.suspend(0.4).then(() => {
+        br.holdRepeat!(true); // snaps to next grid boundary (0.45s @ 100 BPM grid 1/16)
+        ctx.resume();
+      });
+
+      ctx.suspend(1.2).then(() => {
+        br.holdRepeat!(false);
+        ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const dataL = buffer.getChannelData(0);
+
+      const getRMS = (startSec: number, endSec: number) => {
+        const start = Math.floor(startSec * sr);
+        const end = Math.floor(endSec * sr);
+        let sum = 0;
+        for (let i = start; i < end; i++) sum += dataL[i] * dataL[i];
+        return 10 * Math.log10(Math.sqrt(sum / (end - start)) + 1e-12);
+      };
+
+      const rmsBefore = getRMS(0, 0.3);    // dry tone (Insert idle passthrough)
+      const rmsDuring = getRMS(0.8, 1.1);  // input is SILENT here — only held repeats can sound
+      const rmsAfter = getRMS(1.4, 1.8);   // released + input silent -> silence proves release worked
+
+      return { rmsBefore, rmsDuring, rmsAfter };
+    });
+
+    expect(result.rmsBefore).toBeGreaterThan(-60);
+    expect(result.rmsDuring).toBeGreaterThan(-60);
+    expect(result.rmsAfter).toBeLessThan(-60);
+  });
+
+  test('Gate mode silence', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 1, sr);
+      await ensureBufferRepeaterWorklet(ctx);
+      const br = createBufferRepeater(ctx, 'br1');
+      br.bind('mode', 2); // Gate
+      br.bind('gate', 2); // gate = 2 sixteenths
+      
+      const osc = ctx.createOscillator();
+      osc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      osc.start();
+
+      // trig at 0.2 snaps to the next grid boundary: 0.30s (grid = 0.15s @ 100 BPM).
+      // gate 2 -> burst [0.30, 0.60): slot0 capture [0.30,0.45) is MUTED in Gate mode
+      // (dry gated, repeats not yet sounding); slot1 [0.45,0.60) replays audibly.
+      ctx.suspend(0.05).then(() => {
+        br.triggerIns!.trig!(0.2);
+        ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const dataL = buffer.getChannelData(0);
+
+      const getRMS = (startSec: number, endSec: number) => {
+        const start = Math.floor(startSec * sr);
+        const end = Math.floor(endSec * sr);
+        let sum = 0;
+        for (let i = start; i < end; i++) sum += dataL[i] * dataL[i];
+        return 10 * Math.log10(Math.sqrt(sum / (end - start)) + 1e-12);
+      };
+
+      const rmsBefore = getRMS(0.05, 0.25); // Gate idle = silence (Ableton semantics)
+      const rmsInside = getRMS(0.46, 0.58); // slot1 replay window
+      const rmsAfter = getRMS(0.7, 0.95);   // burst over -> Gate idle silence again
+      
+      return { rmsBefore, rmsInside, rmsAfter };
+    });
+    
+    expect(result.rmsBefore).toBeLessThan(-60);
+    expect(result.rmsInside).toBeGreaterThan(-60);
+    expect(result.rmsAfter).toBeLessThan(-60);
   });
 });

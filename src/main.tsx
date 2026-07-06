@@ -4,7 +4,8 @@ import '@xyflow/react/dist/style.css';
 import './design/tokens.css';
 import App from './App';
 import { ensureGrainWorklet } from './audio/grainWorklet';
-import { createGrainDelay } from './audio/units';
+import { ensureBufferRepeaterWorklet } from './audio/bufferRepeaterWorklet';
+import { createGrainDelay, createBufferRepeater } from './audio/units';
 
 import { version } from '../package.json';
 
@@ -13,6 +14,8 @@ import { version } from '../package.json';
 (window as unknown as Record<string, unknown>).__plWorkletTest = {
   ensureGrainWorklet,
   createGrainDelay,
+  ensureBufferRepeaterWorklet,
+  createBufferRepeater,
 };
 
 const mode = import.meta.env.DEV ? `dev ${__BUILD_TIME__}` : import.meta.env.VITE_GIT_HASH || 'prod';

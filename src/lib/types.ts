@@ -46,6 +46,8 @@ export interface AudioUnit {
   triggerIns?: Record<string, (time?: number) => void>;
   /** optional pre-teardown fade for persistent graph boundaries */
   prepareTeardown?(when: number): void;
+  /** optional immediate burst repeat trigger/hold */
+  holdRepeat?(on: boolean): void;
   dispose(): void;
 }
 

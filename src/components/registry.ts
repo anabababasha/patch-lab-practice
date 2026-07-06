@@ -25,6 +25,7 @@ import {
   createStepSequencer,
   createLooper,
   createGrainDelay,
+  createBufferRepeater,
 } from '../audio/units';
 import { DIVISIONS } from '../audio/sync';
 
@@ -654,6 +655,66 @@ export const registry: Record<string, ComponentSpec> = {
     createAudio: createGrainDelay,
   },
 
+  buffer_repeater: {
+    type: 'buffer_repeater',
+    name: 'Buffer Repeater',
+    category: 'dsp',
+    pins: [aIn('in', 'Input'), tIn('trig', 'Repeat'), aOut('out', 'Output')],
+    params: [
+      {
+        id: 'interval',
+        label: 'Interval',
+        unit: '',
+        min: 0,
+        max: 4,
+        step: 1,
+        default: 2,
+        kind: 'select',
+        options: ['1/4', '1/2', '1 bar', '2 bars', '4 bars'],
+      },
+      { id: 'offset', label: 'Offset', unit: '', min: 0, max: 15, step: 1, default: 0 },
+      pct('chance', 'Chance', 0),
+      {
+        id: 'grid',
+        label: 'Grid',
+        unit: '',
+        min: 0,
+        max: 6,
+        step: 1,
+        default: 2,
+        kind: 'select',
+        options: ['1/32', '1/16T', '1/16', '1/8T', '1/8', '1/4', '1/2'],
+      },
+      { id: 'variation', label: 'Variation', unit: '', min: 0, max: 10, step: 1, default: 0 },
+      { id: 'gate', label: 'Gate', unit: '', min: 1, max: 16, step: 1, default: 4 },
+      { id: 'pitch', label: 'Pitch', unit: 'st', min: -12, max: 0, step: 1, default: 0 },
+      pct('pitchDecay', 'Pitch Decay', 0),
+      pct('decay', 'Decay', 0),
+      {
+        id: 'mode',
+        label: 'Mode',
+        unit: '',
+        min: 0,
+        max: 2,
+        step: 1,
+        default: 1,
+        kind: 'select',
+        options: ['Mix', 'Insert', 'Gate'],
+      },
+      toggle('bypass', 'Bypass', 0),
+    ],
+    internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Ableton-style tempo-locked stutter/glitch.',
+      tips: [
+        'Chance is 0 by default — wire a trigger or raise Chance to ignite it.',
+        'Gate shorter than Grid is silent by design.',
+        'Repeats pitch DOWN by slowing playback — each repeat covers less of the slice (the classic blur).'
+      ],
+    },
+    createAudio: createBufferRepeater,
+  },
+
   reverb: {
     type: 'reverb',
     name: 'Reverb',
@@ -932,6 +993,7 @@ export const paletteOrder: Array<{
       'compressor',
       'delay',
       'grain_delay',
+      'buffer_repeater',
       'reverb',
       'distortion',
       'panner',
@@ -946,6 +1008,7 @@ export const paletteOrder: Array<{
 /** legacy type aliases from Build 1 designs */
 export const typeAliases: Record<string, string> = {
   sine_gen: 'signal_gen',
+  beat_repeat: 'buffer_repeater', // pre-release rename (brand-name collision)
 };
 
 /** resolve a component's internal routing for a given node's params */
