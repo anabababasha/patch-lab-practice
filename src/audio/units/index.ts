@@ -996,13 +996,37 @@ export function createMixer(ctx: AudioContext): AudioUnit {
   });
   sum.connect(an);
 
+  const lvlDb = [0, 0, 0, 0];
+  const muted = [false, false, false, false];
+  const soloed = [false, false, false, false];
+
+  const recompute = (i: number) => {
+    const anySolo = soloed.some(s => s);
+    const audible = anySolo ? (soloed[i] && !muted[i]) : !muted[i];
+    ins[i].gain.setTargetAtTime(audible ? dbToGain(lvlDb[i]) : 0, ctx.currentTime, 0.01);
+  };
+
   return {
     inputs: { in1: ins[0], in2: ins[1], in3: ins[2], in4: ins[3] },
     outputs: { out: an },
     analysers: { out: an },
     bind(id, v) {
-      const m = /^lvl([1-4])$/.exec(id);
-      if (m) setNow(ins[Number(m[1]) - 1].gain, dbToGain(v), ctx);
+      const l = /^lvl([1-4])$/.exec(id);
+      if (l) {
+        const i = Number(l[1]) - 1;
+        lvlDb[i] = v;
+        recompute(i);
+      }
+      const m = /^mute([1-4])$/.exec(id);
+      if (m) {
+        muted[Number(m[1]) - 1] = v > 0.5;
+        for (let i = 0; i < 4; i++) recompute(i);
+      }
+      const s = /^solo([1-4])$/.exec(id);
+      if (s) {
+        soloed[Number(s[1]) - 1] = v > 0.5;
+        for (let i = 0; i < 4; i++) recompute(i);
+      }
       const p = /^pan([1-4])$/.exec(id);
       if (p) setNow(panners[Number(p[1]) - 1].pan, clamp(v, -1, 1), ctx);
       if (id === 'master') setNow(sum.gain, dbToGain(v), ctx);

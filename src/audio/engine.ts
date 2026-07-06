@@ -272,8 +272,14 @@ class AudioEngine {
     const eqAnalysers = new Map<string, AnalyserNode>();
 
     for (const [id, unit] of this.units.entries()) {
-      const first = Object.values(unit.analysers)[0];
-      if (first) meters.set(id, first);
+      const analysers = Object.entries(unit.analysers);
+      if (analysers.length > 0) {
+        meters.set(id, analysers[0][1]);
+        for (const [key, analyser] of analysers) {
+          meters.set(`${id}:${key}`, analyser);
+        }
+      }
+      const first = analysers.length > 0 ? analysers[0][1] : undefined;
       if (unit.scope) scopes.set(id, unit.scope);
       if (unit.eqFilters) {
         eqFilters.set(id, unit.eqFilters);

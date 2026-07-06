@@ -17,8 +17,8 @@ const FPS_INTERVAL = 1000 / 30;
  * node's <canvas> via refs — no React state anywhere on the audio path.
  */
 class MeterService {
-  private analysers = new Map<string, AnalyserNode>(); // nodeId -> analyser
-  private canvases = new Map<string, HTMLCanvasElement>();
+  private analysers = new Map<string, AnalyserNode>(); // lookupKey -> analyser
+  private canvases = new Map<string, { el: HTMLCanvasElement; lookup: string }>();
   private levels = new Map<string, Level>();
   private buf = new Float32Array(512);
   private last = 0;
@@ -37,12 +37,14 @@ class MeterService {
     this.ensureRunning();
   }
 
-  attachCanvas(nodeId: string, el: HTMLCanvasElement | null) {
+  attachCanvas(nodeId: string, el: HTMLCanvasElement | null, slot = 'node', analyserKey?: string) {
+    const canvasKey = `${nodeId}|${slot}`;
     if (el) {
-      this.canvases.set(nodeId, el);
+      const lookup = analyserKey ? `${nodeId}:${analyserKey}` : nodeId;
+      this.canvases.set(canvasKey, { el, lookup });
       this.ensureRunning();
     } else {
-      this.canvases.delete(nodeId);
+      this.canvases.delete(canvasKey);
     }
   }
 
@@ -70,12 +72,12 @@ class MeterService {
     this.last = t;
     if (!this.colors) this.readColors();
 
-    for (const [nodeId, canvas] of this.canvases) {
-      const an = this.analysers.get(nodeId);
-      let level = this.levels.get(nodeId);
+    for (const [canvasKey, { el: canvas, lookup }] of this.canvases) {
+      const an = this.analysers.get(lookup);
+      let level = this.levels.get(lookup);
       if (!level) {
         level = { rmsDb: FLOOR, peakHoldDb: FLOOR, holdUntil: 0, clipUntil: 0 };
-        this.levels.set(nodeId, level);
+        this.levels.set(lookup, level);
       }
 
       if (an) {

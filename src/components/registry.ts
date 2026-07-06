@@ -707,12 +707,20 @@ export const registry: Record<string, ComponentSpec> = {
     params: [
       db('lvl1', 'Level 1', -60, 12, 0),
       pan('pan1', 'Pan 1'),
+      toggle('mute1', 'Mute 1'),
+      toggle('solo1', 'Solo 1'),
       db('lvl2', 'Level 2', -60, 12, 0),
       pan('pan2', 'Pan 2'),
+      toggle('mute2', 'Mute 2'),
+      toggle('solo2', 'Solo 2'),
       db('lvl3', 'Level 3', -60, 12, 0),
       pan('pan3', 'Pan 3'),
+      toggle('mute3', 'Mute 3'),
+      toggle('solo3', 'Solo 3'),
       db('lvl4', 'Level 4', -60, 12, 0),
       pan('pan4', 'Pan 4'),
+      toggle('mute4', 'Mute 4'),
+      toggle('solo4', 'Solo 4'),
       db('master', 'Master', -60, 12, 0),
     ],
     internalRouting: {
@@ -723,7 +731,12 @@ export const registry: Record<string, ComponentSpec> = {
     },
     help: {
       summary: 'Each input has Level + Pan — a four-channel console into one stereo Mix Out.',
-      tips: ['Inputs sum: four hot signals can overload — trim each.', 'Pan each input before the stereo Mix Out to place sources left, center, or right.', 'This is the ONLY way to merge signals; inputs accept one wire each.'],
+      tips: [
+        'Inputs sum: four hot signals can overload — trim each.',
+        'Pan each input before the stereo Mix Out to place sources left, center, or right.',
+        'This is the ONLY way to merge signals; inputs accept one wire each.',
+        'Solo isolates one or more inputs; Mute always wins over Solo.',
+      ],
       flows: [
         { title: 'Sum two chains', chain: [{label:'Source A / Source B'}, {label:'Mixer', kind:'audio'}, {label:'Master Out', kind:'audio'}] }
       ],
