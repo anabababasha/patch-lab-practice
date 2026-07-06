@@ -24,6 +24,7 @@ import {
   createEnvelope,
   createStepSequencer,
   createLooper,
+  createGrainDelay,
 } from '../audio/units';
 import { DIVISIONS } from '../audio/sync';
 
@@ -613,6 +614,46 @@ export const registry: Record<string, ComponentSpec> = {
     createAudio: createDelay,
   },
 
+  grain_delay: {
+    type: 'grain_delay',
+    name: 'Grain Delay',
+    category: 'dsp',
+    pins: [aIn('in', 'Input'), aOut('out', 'Output')],
+    params: [
+      {
+        id: 'time',
+        label: 'Time',
+        unit: 'ms',
+        min: 10,
+        max: 2000,
+        step: 1,
+        default: 250,
+        taper: 'log',
+        sync: { kind: 'ms', defaultDiv: 6 /* 1/8 */ },
+      },
+      { id: 'time_div', label: 'Time sync', unit: '', min: 0, max: 1 + DIVISIONS.length, step: 1, default: 0, hidden: true },
+      { id: 'size', label: 'Grain Size', unit: 'ms', min: 20, max: 1000, step: 1, default: 100, taper: 'log' },
+      { id: 'density', label: 'Density', unit: 'x', min: 0.25, max: 8, step: 0.25, default: 2 },
+      { id: 'pitch', label: 'Pitch', unit: 'st', min: -24, max: 24, step: 1, default: 0 },
+      { id: 'rndPitch', label: 'Rnd Pitch', unit: 'ct', min: 0, max: 100, step: 1, default: 0 },
+      { id: 'spray', label: 'Spray', unit: 'ms', min: 0, max: 500, step: 1, default: 20 },
+      pct('spread', 'Spread', 50),
+      pct('feedback', 'Feedback', 35),
+      pct('mix', 'Mix', 35),
+      toggle('freeze', 'Freeze', 0),
+      toggle('bypass', 'Bypass', 0),
+    ],
+    internalRouting: { in: ['out'] },
+    help: {
+      summary: 'Granular delay — clouds, freeze, pitch-sprayed echoes.',
+      tips: [
+        'Freeze stops recording and loops the last seconds — grains keep playing forever.',
+        'A structural edit to this node\'s own wires rebuilds it and clears its ring — by design; unrelated edits never touch it.'
+      ],
+    },
+    createAudio: createGrainDelay,
+  },
+
   reverb: {
     type: 'reverb',
     name: 'Reverb',
@@ -890,6 +931,7 @@ export const paletteOrder: Array<{
       'peq4',
       'compressor',
       'delay',
+      'grain_delay',
       'reverb',
       'distortion',
       'panner',

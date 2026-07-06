@@ -10,6 +10,7 @@ import { triggerBus } from './triggerBus';
 import { recorderService } from './recorderService';
 import { looperService } from './looperService';
 import { ensureCaptureWorklet } from './captureWorklet';
+import { ensureGrainWorklet } from './grainWorklet';
 import { resolveParamValue } from './sync';
 
 /**
@@ -53,6 +54,7 @@ class AudioEngine {
     this.lastDesign = design;
     await ctx.resume();
     await ensureCaptureWorklet(ctx);
+    await ensureGrainWorklet(ctx);
     this.rebuild(design);
     return ctx.state === 'running';
   }

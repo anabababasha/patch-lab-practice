@@ -5,7 +5,7 @@ const externalPreview = process.env.PATCHLAB_EXTERNAL_PREVIEW === '1';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: /corpus\.spec\.ts/,
+  testMatch: /(corpus|worklets)\.spec\.ts/,
   fullyParallel: false,
   timeout: 30_000,
   expect: {

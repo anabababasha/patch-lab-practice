@@ -822,6 +822,70 @@ export function createDelay(ctx: AudioContext): AudioUnit {
   };
 }
 
+export function createGrainDelay(ctx: AudioContext): AudioUnit {
+  const input = ctx.createGain();
+  const dry = ctx.createGain();
+  const wet = ctx.createGain();
+  const sum = ctx.createGain();
+  const an = makeAnalyser(ctx);
+
+  const worklet = new AudioWorkletNode(ctx, 'pl-graindelay', {
+    numberOfInputs: 1,
+    numberOfOutputs: 1,
+    channelCount: 2,
+    outputChannelCount: [2],
+  });
+
+  input.connect(dry);
+  input.connect(worklet);
+  worklet.connect(wet);
+  dry.connect(sum);
+  wet.connect(sum);
+  sum.connect(an);
+
+  let bypassOn = false;
+  let mixVal = 35;
+
+  const updateMix = () => {
+    if (bypassOn) {
+      dry.gain.setTargetAtTime(1, ctx.currentTime, 0.01);
+      wet.gain.setTargetAtTime(0, ctx.currentTime, 0.01);
+    } else {
+      const m = clamp(mixVal / 100, 0, 1);
+      dry.gain.setTargetAtTime(Math.cos(m * Math.PI / 2), ctx.currentTime, 0.01);
+      wet.gain.setTargetAtTime(Math.sin(m * Math.PI / 2), ctx.currentTime, 0.01);
+    }
+  };
+
+  updateMix();
+
+  return {
+    inputs: { in: input },
+    outputs: { out: an },
+    analysers: { out: an },
+    bind(id, v) {
+      if (id === 'bypass') {
+        bypassOn = v > 0.5;
+        updateMix();
+      } else if (id === 'mix') {
+        mixVal = v;
+        updateMix();
+      } else {
+        worklet.port.postMessage({ id, value: v });
+      }
+    },
+    dispose() {
+      disconnectNode(input);
+      disconnectNode(dry);
+      disconnectNode(wet);
+      disconnectNode(sum);
+      disconnectNode(an);
+      try { worklet.disconnect(); } catch {}
+      worklet.port.close();
+    },
+  };
+}
+
 /* synthesized exponential-decay impulse response */
 function makeIR(ctx: AudioContext, seconds: number): AudioBuffer {
   const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));

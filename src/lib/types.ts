@@ -11,7 +11,7 @@ export interface PinSpec {
 export interface ParamSpec {
   id: string;
   label: string;
-  unit: 'dB' | 'Hz' | 'ms' | '%' | 's' | '';
+  unit: 'dB' | 'Hz' | 'ms' | '%' | 's' | 'x' | 'st' | 'ct' | '';
   min: number;
   max: number;
   step: number;
