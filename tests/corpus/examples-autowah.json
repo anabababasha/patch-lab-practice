@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "name": "Example: Auto-Wah",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_yp4f2o9",
+      "type": "noise_gen",
+      "label": "Noise Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "type": 0,
+        "level": -14
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_5uwbrfd",
+      "type": "filter",
+      "label": "Filter",
+      "x": 260,
+      "y": 0,
+      "params": {
+        "type": 2,
+        "freq": 800,
+        "q": 6,
+        "modAmt": 70
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_8o5c4ve",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 520,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_mk2b4jj",
+      "type": "lfo",
+      "label": "LFO",
+      "x": 260,
+      "y": 140,
+      "params": {
+        "wave": 0,
+        "rate": 0.4,
+        "rate_div": 0,
+        "depth": 90
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_g9jt2hr",
+      "from": {
+        "nodeId": "n_ex_yp4f2o9",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_5uwbrfd",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_zlj8zro",
+      "from": {
+        "nodeId": "n_ex_5uwbrfd",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_8o5c4ve",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_o177tfu",
+      "from": {
+        "nodeId": "n_ex_mk2b4jj",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_5uwbrfd",
+        "pinId": "mod"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    }
+  ]
+}

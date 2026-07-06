@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useApp } from '../app/store';
 import { engine } from '../audio/engine';
+import { designToUrl } from '../lib/share';
 import { version } from '../../package.json';
 
 export function TopBar() {
@@ -21,6 +22,7 @@ export function TopBar() {
   const newDesign = useApp((s) => s.newDesign);
   const exportJson = useApp((s) => s.exportJson);
   const importJson = useApp((s) => s.importJson);
+  const showToast = useApp((s) => s.showToast);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const toggleAudio = async () => {
@@ -41,6 +43,25 @@ export function TopBar() {
     a.download = `${name.trim().replace(/\s+/g, '-').toLowerCase() || 'design'}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const doShare = async () => {
+    const url = designToUrl(useApp.getState().design);
+    const payload = url.split('#d=')[1] ?? '';
+    const kb = Math.max(1, Math.ceil(new Blob([payload]).size / 1024));
+    const msg =
+      payload.length > 32 * 1024
+        ? `Link copied · ${kb} KB · large link`
+        : `Link copied · ${kb} KB`;
+
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(url);
+      showToast(msg);
+    } catch {
+      window.prompt('Copy share link', url);
+      showToast(msg);
+    }
   };
 
   const doImport = async (file: File | undefined) => {
@@ -133,6 +154,9 @@ export function TopBar() {
       </button>
       <button className="pl-btn" onClick={doExport}>
         Export
+      </button>
+      <button className="pl-btn" onClick={doShare}>
+        Share
       </button>
       <button className="pl-btn" onClick={() => fileRef.current?.click()}>
         Import

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "name": "Example: Scope Demo",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_4yxv7ho",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 110,
+        "level": -12,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_t0t2ju3",
+      "type": "analyzer",
+      "label": "Analyzer",
+      "x": 260,
+      "y": 0,
+      "params": {
+        "mode": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_qtoxra4",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 520,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_6rb2ai6",
+      "from": {
+        "nodeId": "n_ex_4yxv7ho",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_t0t2ju3",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_dxalnai",
+      "from": {
+        "nodeId": "n_ex_t0t2ju3",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_qtoxra4",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    }
+  ]
+}

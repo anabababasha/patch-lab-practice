@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { Design, NodeInstance, PinRef, Wire } from '../lib/types';
+import { CURRENT_SCHEMA_VERSION, migrateDesign } from '../lib/migrations';
+import { urlToDesign } from '../lib/share';
 import { registry, typeAliases } from '../components/registry';
 import { computeTrace, computeTraceFromWire } from '../graph/trace';
 import type { TraceResult } from '../graph/trace';
@@ -30,20 +32,34 @@ let saveTimer: number | undefined;
 function saveSoon(design: Design) {
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(design));
-    } catch {
-      /* storage full / unavailable — autosave is best-effort */
-    }
+    saveNow(design);
   }, 500);
+}
+
+function saveNow(design: Design) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(design));
+  } catch {
+    /* storage full / unavailable — autosave is best-effort */
+  }
 }
 
 /** Validate + sanitize an unknown parsed value into a Design, or null. */
 export function sanitizeDesign(raw: unknown): Design | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const d = raw as Partial<Design>;
-  if (d.version !== 1 || !Array.isArray(d.nodes) || !Array.isArray(d.wires))
+  const migrated = migrateDesign(raw);
+  if (!migrated || typeof migrated !== 'object') return null;
+  const d = migrated as Partial<Design>;
+  const version =
+    typeof d.version === 'number' && Number.isInteger(d.version) && d.version >= 1
+      ? d.version
+      : 1;
+  if (!Array.isArray(d.nodes) || !Array.isArray(d.wires))
     return null;
+  if (version > CURRENT_SCHEMA_VERSION) {
+    console.warn(
+      `sanitizeDesign: Opened newer design version '${version}' as v${CURRENT_SCHEMA_VERSION}; unknown fields may be dropped`,
+    );
+  }
 
   const layers = Array.isArray(d.layers) && d.layers.length > 0 
     ? d.layers 
@@ -197,6 +213,54 @@ function loadSaved(): Design | null {
   }
 }
 
+interface InitialLoad {
+  design: Design;
+  previous: Design | null;
+  toast: string | null;
+}
+
+function stripShareHash() {
+  window.history.replaceState(null, '', `${location.pathname}${location.search}`);
+}
+
+function loadInitialDesign(): InitialLoad {
+  const saved = loadSaved();
+
+  if (location.hash.startsWith('#d=')) {
+    const raw = urlToDesign(location.hash);
+    if (!raw) {
+      console.warn("Couldn't read shared link: decode failed");
+      stripShareHash();
+      return {
+        design: saved ?? emptyDesign(),
+        previous: null,
+        toast: "Couldn't read shared link",
+      };
+    }
+
+    const design = sanitizeDesign(migrateDesign(raw));
+    if (design) {
+      saveNow(design);
+      stripShareHash();
+      return {
+        design,
+        previous: saved,
+        toast: 'Loaded shared design',
+      };
+    }
+
+    console.warn("Couldn't read shared link: sanitize failed");
+    stripShareHash();
+    return {
+      design: saved ?? emptyDesign(),
+      previous: null,
+      toast: "Couldn't read shared link",
+    };
+  }
+
+  return { design: saved ?? emptyDesign(), previous: null, toast: null };
+}
+
 /* ------------------------------------------------------------- store */
 
 type TraceSource =
@@ -301,7 +365,9 @@ const snapshot = (d: Design) => {
 };
 
 export const useApp = create<AppState>((set, get) => {
-  const initialDesign = loadSaved() ?? emptyDesign();
+  const initialLoad = loadInitialDesign();
+  const initialDesign = initialLoad.design;
+  if (initialLoad.previous) history.push(structuredClone(initialLoad.previous));
   const initialBpm = initialDesign.settings?.bpm ?? 100;
   transportService.setBpm(initialBpm);
 
@@ -349,14 +415,14 @@ export const useApp = create<AppState>((set, get) => {
       trace: null,
       traceSource: null,
       tracePinned: false,
-      toast: null,
+      toast: initialLoad.toast ? { id: Date.now(), msg: initialLoad.toast } : null,
       rejections: [],
       panelOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
       panelTab: 'info',
       activeLayerId: 'all',
     },
     audioRunning: false,
-    canUndo: false,
+    canUndo: history.length > 0,
     canRedo: false,
     transport: { playing: false, bpm: initialBpm },
 

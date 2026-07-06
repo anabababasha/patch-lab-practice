@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "name": "Example: Dub Delay",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_epep9vi",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 330,
+        "level": -16,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_xbfzwcl",
+      "type": "delay",
+      "label": "Delay",
+      "x": 260,
+      "y": 0,
+      "params": {
+        "time": 380,
+        "time_div": 0,
+        "feedback": 65,
+        "mix": 55,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_gflwl2m",
+      "type": "analyzer",
+      "label": "Analyzer",
+      "x": 520,
+      "y": 0,
+      "params": {
+        "mode": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_yl20uxa",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 780,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_aruowar",
+      "from": {
+        "nodeId": "n_ex_epep9vi",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_xbfzwcl",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_v5ycfpu",
+      "from": {
+        "nodeId": "n_ex_xbfzwcl",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_gflwl2m",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_bbd4def",
+      "from": {
+        "nodeId": "n_ex_gflwl2m",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_yl20uxa",
+        "pinId": "in"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    }
+  ]
+}

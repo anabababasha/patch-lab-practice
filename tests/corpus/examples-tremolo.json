@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "name": "Example: Tremolo",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_7ore7gz",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 440,
+        "level": -14,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_rb97qw0",
+      "type": "gain",
+      "label": "Gain",
+      "x": 260,
+      "y": 0,
+      "params": {
+        "gain": 0,
+        "mute": 0,
+        "modAmt": 60
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_ny0dkx1",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 520,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_beuiwt4",
+      "type": "lfo",
+      "label": "LFO",
+      "x": 260,
+      "y": 140,
+      "params": {
+        "wave": 0,
+        "rate": 5,
+        "rate_div": 0,
+        "depth": 80
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_450uw47",
+      "from": {
+        "nodeId": "n_ex_7ore7gz",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_rb97qw0",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_unft8qa",
+      "from": {
+        "nodeId": "n_ex_rb97qw0",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_ny0dkx1",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_pmtlc28",
+      "from": {
+        "nodeId": "n_ex_beuiwt4",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_rb97qw0",
+        "pinId": "mod"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    }
+  ]
+}

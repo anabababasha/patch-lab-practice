@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "name": "Corpus: With settings",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "settings_lfo",
+      "type": "lfo",
+      "label": "LFO",
+      "x": 0,
+      "y": 140,
+      "params": {
+        "wave": 0,
+        "rate": 1.7,
+        "rate_div": 7,
+        "depth": 80
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "settings_sig",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 330,
+        "level": -18,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "settings_delay",
+      "type": "delay",
+      "label": "Delay",
+      "x": 300,
+      "y": 0,
+      "params": {
+        "time": 420,
+        "time_div": 9,
+        "feedback": 42,
+        "mix": 35,
+        "modAmt": 25
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "settings_master",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 620,
+      "y": 0,
+      "params": {
+        "level": -8,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "settings_w1",
+      "from": {
+        "nodeId": "settings_sig",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "settings_delay",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "settings_w2",
+      "from": {
+        "nodeId": "settings_delay",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "settings_master",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "settings_w3",
+      "from": {
+        "nodeId": "settings_lfo",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "settings_delay",
+        "pinId": "mod"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    }
+  ],
+  "settings": {
+    "bpm": 137,
+    "sync": true
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "name": "Corpus: Pre-settings",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pre_sig",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 220,
+        "level": -18,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "pre_gain",
+      "type": "gain",
+      "label": "Gain",
+      "x": 280,
+      "y": 0,
+      "params": {
+        "gain": -6,
+        "mute": 0,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "pre_master",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 560,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "pre_w1",
+      "from": {
+        "nodeId": "pre_sig",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "pre_gain",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "pre_w2",
+      "from": {
+        "nodeId": "pre_gain",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "pre_master",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    }
+  ]
+}

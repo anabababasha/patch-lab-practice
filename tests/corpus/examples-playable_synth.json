@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "name": "Example: Playable Synth",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_6q9rbyi",
+      "type": "midi_in",
+      "label": "MIDI In",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "device": 0,
+        "channel": 0,
+        "octave": 0,
+        "computer": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_hrg0lnf",
+      "type": "envelope",
+      "label": "Envelope",
+      "x": 300,
+      "y": 0,
+      "params": {
+        "attack": 2,
+        "decay": 400,
+        "curve": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_ye9qxsy",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 300,
+      "y": 150,
+      "params": {
+        "wave": 2,
+        "freq": 440,
+        "level": -8,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_e2glg7h",
+      "type": "filter",
+      "label": "Filter",
+      "x": 600,
+      "y": 150,
+      "params": {
+        "type": 0,
+        "freq": 1800,
+        "q": 2,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_b2jeqig",
+      "type": "gain",
+      "label": "Gain",
+      "x": 900,
+      "y": 150,
+      "params": {
+        "gain": -60,
+        "mute": 0,
+        "modAmt": 100
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_9m3re6j",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 1200,
+      "y": 150,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_hlx219e",
+      "from": {
+        "nodeId": "n_ex_6q9rbyi",
+        "pinId": "gate"
+      },
+      "to": {
+        "nodeId": "n_ex_hrg0lnf",
+        "pinId": "trig"
+      },
+      "colorIndex": 1,
+      "kind": "trigger"
+    },
+    {
+      "id": "w_ex_qr8lkoi",
+      "from": {
+        "nodeId": "n_ex_hrg0lnf",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_b2jeqig",
+        "pinId": "mod"
+      },
+      "colorIndex": 2,
+      "kind": "control"
+    },
+    {
+      "id": "w_ex_ksod1t7",
+      "from": {
+        "nodeId": "n_ex_6q9rbyi",
+        "pinId": "pitch"
+      },
+      "to": {
+        "nodeId": "n_ex_ye9qxsy",
+        "pinId": "pitch"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    },
+    {
+      "id": "w_ex_h6jcm9q",
+      "from": {
+        "nodeId": "n_ex_ye9qxsy",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_e2glg7h",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_fa1dn8s",
+      "from": {
+        "nodeId": "n_ex_e2glg7h",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_b2jeqig",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_2qnd1jl",
+      "from": {
+        "nodeId": "n_ex_b2jeqig",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_9m3re6j",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    }
+  ]
+}

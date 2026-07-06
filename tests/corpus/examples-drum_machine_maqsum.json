@@ -1,0 +1,383 @@
+{
+  "version": 1,
+  "name": "Example: Drum Machine (Maqsum)",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n_ex_nxg74cw",
+      "type": "step_seq",
+      "label": "Step Sequencer",
+      "x": 0,
+      "y": 0,
+      "params": {
+        "steps": 8,
+        "rate": 0,
+        "muted": 0,
+        "s1_1": 1,
+        "s1_2": 0,
+        "s1_3": 0,
+        "s1_4": 0,
+        "s1_5": 1,
+        "s1_6": 0,
+        "s1_7": 0,
+        "s1_8": 0,
+        "s1_9": 0,
+        "s1_10": 0,
+        "s1_11": 0,
+        "s1_12": 0,
+        "s1_13": 0,
+        "s1_14": 0,
+        "s1_15": 0,
+        "s1_16": 0,
+        "s2_1": 0,
+        "s2_2": 1,
+        "s2_3": 0,
+        "s2_4": 1,
+        "s2_5": 0,
+        "s2_6": 0,
+        "s2_7": 1,
+        "s2_8": 0,
+        "s2_9": 0,
+        "s2_10": 0,
+        "s2_11": 0,
+        "s2_12": 0,
+        "s2_13": 0,
+        "s2_14": 0,
+        "s2_15": 0,
+        "s2_16": 0,
+        "s3_1": 0,
+        "s3_2": 0,
+        "s3_3": 0,
+        "s3_4": 0,
+        "s3_5": 0,
+        "s3_6": 0,
+        "s3_7": 0,
+        "s3_8": 0,
+        "s3_9": 0,
+        "s3_10": 0,
+        "s3_11": 0,
+        "s3_12": 0,
+        "s3_13": 0,
+        "s3_14": 0,
+        "s3_15": 0,
+        "s3_16": 0,
+        "s4_1": 0,
+        "s4_2": 0,
+        "s4_3": 0,
+        "s4_4": 0,
+        "s4_5": 0,
+        "s4_6": 0,
+        "s4_7": 0,
+        "s4_8": 0,
+        "s4_9": 0,
+        "s4_10": 0,
+        "s4_11": 0,
+        "s4_12": 0,
+        "s4_13": 0,
+        "s4_14": 0,
+        "s4_15": 0,
+        "s4_16": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_dttkpqo",
+      "type": "envelope",
+      "label": "Envelope",
+      "x": 340,
+      "y": 0,
+      "params": {
+        "attack": 1,
+        "decay": 60,
+        "curve": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_67s2we2",
+      "type": "envelope",
+      "label": "Envelope",
+      "x": 340,
+      "y": 140,
+      "params": {
+        "attack": 0.5,
+        "decay": 200,
+        "curve": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_djsuhs6",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": 600,
+      "y": 0,
+      "params": {
+        "wave": 0,
+        "freq": 50,
+        "level": -6,
+        "pitchAmt": 2400
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_mol8ync",
+      "type": "gain",
+      "label": "Gain",
+      "x": 860,
+      "y": 0,
+      "params": {
+        "gain": -60,
+        "mute": 0,
+        "modAmt": 100
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_l1u2rms",
+      "type": "envelope",
+      "label": "Envelope",
+      "x": 340,
+      "y": 280,
+      "params": {
+        "attack": 0.3,
+        "decay": 90,
+        "curve": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_jpom4vp",
+      "type": "noise_gen",
+      "label": "Noise Generator",
+      "x": 600,
+      "y": 280,
+      "params": {
+        "type": 1,
+        "level": -10
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_lw8tk12",
+      "type": "filter",
+      "label": "Filter",
+      "x": 600,
+      "y": 420,
+      "params": {
+        "type": 1,
+        "freq": 2500,
+        "q": 1.5,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_8lb1agi",
+      "type": "gain",
+      "label": "Gain",
+      "x": 860,
+      "y": 280,
+      "params": {
+        "gain": -60,
+        "mute": 0,
+        "modAmt": 100
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_vdaw24w",
+      "type": "mixer",
+      "label": "Mixer 4×1",
+      "x": 1120,
+      "y": 0,
+      "params": {
+        "lvl1": 0,
+        "pan1": 0,
+        "lvl2": 0,
+        "pan2": 0,
+        "lvl3": 0,
+        "pan3": 0,
+        "lvl4": 0,
+        "pan4": 0,
+        "master": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "n_ex_dal6c6d",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 1380,
+      "y": 0,
+      "params": {
+        "level": -6,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "w_ex_r5fzc10",
+      "from": {
+        "nodeId": "n_ex_nxg74cw",
+        "pinId": "row1"
+      },
+      "to": {
+        "nodeId": "n_ex_dttkpqo",
+        "pinId": "trig"
+      },
+      "colorIndex": 1,
+      "kind": "trigger"
+    },
+    {
+      "id": "w_ex_xgldtkw",
+      "from": {
+        "nodeId": "n_ex_nxg74cw",
+        "pinId": "row1"
+      },
+      "to": {
+        "nodeId": "n_ex_67s2we2",
+        "pinId": "trig"
+      },
+      "colorIndex": 2,
+      "kind": "trigger"
+    },
+    {
+      "id": "w_ex_eyt0qvv",
+      "from": {
+        "nodeId": "n_ex_dttkpqo",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_djsuhs6",
+        "pinId": "pitch"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    },
+    {
+      "id": "w_ex_yuhdif7",
+      "from": {
+        "nodeId": "n_ex_djsuhs6",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_mol8ync",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_6rihh0a",
+      "from": {
+        "nodeId": "n_ex_67s2we2",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_mol8ync",
+        "pinId": "mod"
+      },
+      "colorIndex": 1,
+      "kind": "control"
+    },
+    {
+      "id": "w_ex_60a2nwc",
+      "from": {
+        "nodeId": "n_ex_nxg74cw",
+        "pinId": "row2"
+      },
+      "to": {
+        "nodeId": "n_ex_l1u2rms",
+        "pinId": "trig"
+      },
+      "colorIndex": 2,
+      "kind": "trigger"
+    },
+    {
+      "id": "w_ex_h3c9ksb",
+      "from": {
+        "nodeId": "n_ex_jpom4vp",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_lw8tk12",
+        "pinId": "in"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_lvf0u9g",
+      "from": {
+        "nodeId": "n_ex_lw8tk12",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_8lb1agi",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_5spggr3",
+      "from": {
+        "nodeId": "n_ex_l1u2rms",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_8lb1agi",
+        "pinId": "mod"
+      },
+      "colorIndex": 1,
+      "kind": "control"
+    },
+    {
+      "id": "w_ex_gdgcggm",
+      "from": {
+        "nodeId": "n_ex_mol8ync",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_vdaw24w",
+        "pinId": "in1"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_x3erptt",
+      "from": {
+        "nodeId": "n_ex_8lb1agi",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_vdaw24w",
+        "pinId": "in2"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "w_ex_traageu",
+      "from": {
+        "nodeId": "n_ex_vdaw24w",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "n_ex_dal6c6d",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    }
+  ]
+}

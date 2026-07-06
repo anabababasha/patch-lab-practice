@@ -1,0 +1,722 @@
+{
+  "version": 1,
+  "name": "Corpus: Kitchen sink",
+  "layers": [
+    {
+      "id": "main",
+      "name": "Main"
+    },
+    {
+      "id": "aux",
+      "name": "Aux layer"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "ks_trigger",
+      "type": "trigger_pad",
+      "label": "Trigger Pad",
+      "x": -360,
+      "y": 300,
+      "params": {},
+      "layerId": "main"
+    },
+    {
+      "id": "ks_env",
+      "type": "envelope",
+      "label": "Envelope",
+      "x": -80,
+      "y": 300,
+      "params": {
+        "attack": 2,
+        "decay": 260,
+        "curve": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_midi",
+      "type": "midi_in",
+      "label": "MIDI In",
+      "x": -360,
+      "y": 120,
+      "params": {
+        "device": 0,
+        "channel": 0,
+        "octave": 0,
+        "computer": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_seq",
+      "type": "step_seq",
+      "label": "Step Sequencer",
+      "x": -360,
+      "y": -80,
+      "params": {
+        "steps": 8,
+        "rate": 0,
+        "muted": 0,
+        "s1_1": 1,
+        "s1_2": 0,
+        "s1_3": 0,
+        "s1_4": 0,
+        "s1_5": 1,
+        "s1_6": 0,
+        "s1_7": 0,
+        "s1_8": 0,
+        "s1_9": 1,
+        "s1_10": 0,
+        "s1_11": 0,
+        "s1_12": 0,
+        "s1_13": 1,
+        "s1_14": 0,
+        "s1_15": 0,
+        "s1_16": 0,
+        "s2_1": 0,
+        "s2_2": 0,
+        "s2_3": 0,
+        "s2_4": 0,
+        "s2_5": 0,
+        "s2_6": 0,
+        "s2_7": 0,
+        "s2_8": 0,
+        "s2_9": 0,
+        "s2_10": 0,
+        "s2_11": 0,
+        "s2_12": 0,
+        "s2_13": 0,
+        "s2_14": 0,
+        "s2_15": 0,
+        "s2_16": 0,
+        "s3_1": 0,
+        "s3_2": 0,
+        "s3_3": 0,
+        "s3_4": 0,
+        "s3_5": 0,
+        "s3_6": 0,
+        "s3_7": 0,
+        "s3_8": 0,
+        "s3_9": 0,
+        "s3_10": 0,
+        "s3_11": 0,
+        "s3_12": 0,
+        "s3_13": 0,
+        "s3_14": 0,
+        "s3_15": 0,
+        "s3_16": 0,
+        "s4_1": 0,
+        "s4_2": 0,
+        "s4_3": 0,
+        "s4_4": 0,
+        "s4_5": 0,
+        "s4_6": 0,
+        "s4_7": 0,
+        "s4_8": 0,
+        "s4_9": 0,
+        "s4_10": 0,
+        "s4_11": 0,
+        "s4_12": 0,
+        "s4_13": 0,
+        "s4_14": 0,
+        "s4_15": 0,
+        "s4_16": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_signal",
+      "type": "signal_gen",
+      "label": "Signal Generator",
+      "x": -40,
+      "y": -240,
+      "params": {
+        "wave": 2,
+        "freq": 180,
+        "level": -16,
+        "pitchAmt": 1800
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_noise",
+      "type": "noise_gen",
+      "label": "Noise Generator",
+      "x": -40,
+      "y": -80,
+      "params": {
+        "type": 1,
+        "level": -22
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_media",
+      "type": "media_player",
+      "label": "Media Player",
+      "x": -40,
+      "y": 80,
+      "params": {
+        "play": 0,
+        "loop": 1,
+        "level": -12
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_sampler",
+      "type": "sampler",
+      "label": "Sampler",
+      "x": -40,
+      "y": 460,
+      "params": {
+        "level": -9,
+        "tune": -2,
+        "pitchAmt": 1800,
+        "muted": 0,
+        "choke": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_mic",
+      "type": "mic_in",
+      "label": "Mic Input",
+      "x": 260,
+      "y": 460,
+      "params": {
+        "enable": 0,
+        "level": -12
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_mixer",
+      "type": "mixer",
+      "label": "Mixer 4x1",
+      "x": 260,
+      "y": -80,
+      "params": {
+        "lvl1": -6,
+        "pan1": -0.25,
+        "lvl2": -10,
+        "pan2": 0.25,
+        "lvl3": -12,
+        "pan3": 0,
+        "lvl4": -9,
+        "pan4": 0.1,
+        "master": -4
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_router",
+      "type": "router",
+      "label": "Router 4x4",
+      "x": 580,
+      "y": -80,
+      "params": {
+        "r11": 1,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r21": 0,
+        "r22": 1,
+        "r23": 0,
+        "r24": 0,
+        "r31": 0,
+        "r32": 0,
+        "r33": 1,
+        "r34": 0,
+        "r41": 0,
+        "r42": 0,
+        "r43": 0,
+        "r44": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_gain",
+      "type": "gain",
+      "label": "Gain",
+      "x": 900,
+      "y": -80,
+      "params": {
+        "gain": -5,
+        "mute": 0,
+        "modAmt": 55
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_filter",
+      "type": "filter",
+      "label": "Filter",
+      "x": 1180,
+      "y": -80,
+      "params": {
+        "type": 0,
+        "freq": 1600,
+        "q": 1.2,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_peq",
+      "type": "peq4",
+      "label": "Parametric EQ",
+      "x": 1460,
+      "y": -80,
+      "params": {
+        "lsFreq": 100,
+        "lsGain": -1,
+        "b1Freq": 420,
+        "b1Gain": 2,
+        "b1Q": 1.5,
+        "b2Freq": 2800,
+        "b2Gain": -2,
+        "b2Q": 2,
+        "hsFreq": 9000,
+        "hsGain": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_comp",
+      "type": "compressor",
+      "label": "Compressor",
+      "x": 1740,
+      "y": -80,
+      "params": {
+        "threshold": -22,
+        "ratio": 3.5,
+        "attack": 8,
+        "release": 180,
+        "knee": 10,
+        "makeup": 2
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_lfo",
+      "type": "lfo",
+      "label": "LFO",
+      "x": 900,
+      "y": 220,
+      "params": {
+        "wave": 0,
+        "rate": 1.25,
+        "rate_div": 6,
+        "depth": 65
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_delay",
+      "type": "delay",
+      "label": "Delay",
+      "x": 2020,
+      "y": -80,
+      "params": {
+        "time": 360,
+        "time_div": 8,
+        "feedback": 38,
+        "mix": 28,
+        "modAmt": 20
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_reverb",
+      "type": "reverb",
+      "label": "Reverb",
+      "x": 2300,
+      "y": -80,
+      "params": {
+        "decay": 1.6,
+        "mix": 22
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_dist",
+      "type": "distortion",
+      "label": "Distortion",
+      "x": 2580,
+      "y": -80,
+      "params": {
+        "drive": 5,
+        "mix": 45,
+        "level": -4
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_pan",
+      "type": "panner",
+      "label": "Panner",
+      "x": 2860,
+      "y": -80,
+      "params": {
+        "pan": 12,
+        "modAmt": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_analyzer",
+      "type": "analyzer",
+      "label": "Analyzer",
+      "x": 3140,
+      "y": -80,
+      "params": {
+        "mode": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_recorder",
+      "type": "recorder",
+      "label": "Recorder",
+      "x": 3420,
+      "y": -80,
+      "params": {
+        "format": 0
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_looper",
+      "type": "looper",
+      "label": "Looper",
+      "x": 3700,
+      "y": -80,
+      "params": {
+        "loopLevel": -3,
+        "thruLevel": -60,
+        "sync": 1,
+        "speed": 1
+      },
+      "layerId": "main"
+    },
+    {
+      "id": "ks_master",
+      "type": "master_out",
+      "label": "Master Output",
+      "x": 3980,
+      "y": -80,
+      "params": {
+        "level": -8,
+        "muted": 0
+      },
+      "layerId": "main"
+    }
+  ],
+  "wires": [
+    {
+      "id": "ks_w01",
+      "from": {
+        "nodeId": "ks_signal",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_mixer",
+        "pinId": "in1"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w02",
+      "from": {
+        "nodeId": "ks_noise",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_mixer",
+        "pinId": "in2"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w03",
+      "from": {
+        "nodeId": "ks_media",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_mixer",
+        "pinId": "in3"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w04",
+      "from": {
+        "nodeId": "ks_sampler",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_mixer",
+        "pinId": "in4"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w05",
+      "from": {
+        "nodeId": "ks_mixer",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_router",
+        "pinId": "in1"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w06",
+      "from": {
+        "nodeId": "ks_mic",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_router",
+        "pinId": "in2"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w07",
+      "from": {
+        "nodeId": "ks_router",
+        "pinId": "out1"
+      },
+      "to": {
+        "nodeId": "ks_gain",
+        "pinId": "in"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w08",
+      "from": {
+        "nodeId": "ks_gain",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_filter",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w09",
+      "from": {
+        "nodeId": "ks_filter",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_peq",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w10",
+      "from": {
+        "nodeId": "ks_peq",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_comp",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w11",
+      "from": {
+        "nodeId": "ks_comp",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_delay",
+        "pinId": "in"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w12",
+      "from": {
+        "nodeId": "ks_delay",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_reverb",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w13",
+      "from": {
+        "nodeId": "ks_reverb",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_dist",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w14",
+      "from": {
+        "nodeId": "ks_dist",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_pan",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w15",
+      "from": {
+        "nodeId": "ks_pan",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_analyzer",
+        "pinId": "in"
+      },
+      "colorIndex": 3,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w16",
+      "from": {
+        "nodeId": "ks_analyzer",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_recorder",
+        "pinId": "in"
+      },
+      "colorIndex": 4,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w17",
+      "from": {
+        "nodeId": "ks_recorder",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_looper",
+        "pinId": "in"
+      },
+      "colorIndex": 1,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w18",
+      "from": {
+        "nodeId": "ks_looper",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_master",
+        "pinId": "in"
+      },
+      "colorIndex": 2,
+      "kind": "audio"
+    },
+    {
+      "id": "ks_w19",
+      "from": {
+        "nodeId": "ks_trigger",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_env",
+        "pinId": "trig"
+      },
+      "colorIndex": 3,
+      "kind": "trigger"
+    },
+    {
+      "id": "ks_w20",
+      "from": {
+        "nodeId": "ks_env",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_gain",
+        "pinId": "mod"
+      },
+      "colorIndex": 4,
+      "kind": "control"
+    },
+    {
+      "id": "ks_w21",
+      "from": {
+        "nodeId": "ks_seq",
+        "pinId": "row1"
+      },
+      "to": {
+        "nodeId": "ks_sampler",
+        "pinId": "trig"
+      },
+      "colorIndex": 1,
+      "kind": "trigger"
+    },
+    {
+      "id": "ks_w22",
+      "from": {
+        "nodeId": "ks_midi",
+        "pinId": "pitch"
+      },
+      "to": {
+        "nodeId": "ks_signal",
+        "pinId": "pitch"
+      },
+      "colorIndex": 2,
+      "kind": "control"
+    },
+    {
+      "id": "ks_w23",
+      "from": {
+        "nodeId": "ks_lfo",
+        "pinId": "out"
+      },
+      "to": {
+        "nodeId": "ks_delay",
+        "pinId": "mod"
+      },
+      "colorIndex": 3,
+      "kind": "control"
+    }
+  ],
+  "settings": {
+    "bpm": 118,
+    "sync": true
+  }
+}
