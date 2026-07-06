@@ -286,6 +286,7 @@ export const registry: Record<string, ComponentSpec> = {
       db('level', 'Level', -60, 12, -6),
       { id: 'tune', label: 'Tune', unit: '', min: -24, max: 24, step: 1, default: 0 },
       { id: 'pitchAmt', label: 'Pitch Mod', unit: '', min: -4800, max: 4800, step: 10, default: 2400 },
+      toggle('muted', 'Mute', 0),
       toggle('choke', 'Choke', 1),
     ],
     internalRouting: { trig: ['out'], pitch: ['out'] },
@@ -295,6 +296,8 @@ export const registry: Record<string, ComponentSpec> = {
         'Load a real doum or tak recording and sequence it from the Step Sequencer.',
         'Tune shifts in semitones; Pitch Mod lets an Envelope or MIDI bend each hit.',
         'Choke off = overlapping tails (cymbals); on = tight drums.',
+        'Mute silences ringing voices and ignores triggers until switched back on.',
+        'Choke is per-sampler: two Samplers never choke each other.',
       ],
       flows: [
         { title: 'Sampled drum', chain: [{label:'Step Seq · Row 1'}, {label:'Sampler', kind:'trigger'}, {label:'Mixer / Master', kind:'audio'}] },

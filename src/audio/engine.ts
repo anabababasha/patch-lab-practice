@@ -1,4 +1,4 @@
-import type { AudioUnit, Design } from '../lib/types';
+import type { AudioUnit, Design, NodeInstance, Wire } from '../lib/types';
 import { registry } from '../components/registry';
 import { eqService } from './eqService';
 import { meterService } from './meterService';
@@ -13,15 +13,18 @@ import { ensureCaptureWorklet } from './captureWorklet';
 
 /**
  * Compile strategy: correctness over cleverness.
- *  - structural change  -> debounced 50 ms full teardown + rebuild
+ *  - structural change  -> debounced 50 ms splice rebuild with full fallback
  *  - param change       -> bind() only (setTargetAtTime, zero rebuilds)
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private units = new Map<string, AudioUnit>();
+  private unitTypes = new Map<string, string>();
   private triggerMap = new Map<string, Array<(time?: number) => void>>();
   private timer: number | undefined;
   private lastDesign: Design | null = null;
+  private lastBuilt: Design | null = null;
+  private fadePending = false;
   onStateChange: ((running: boolean) => void) | null = null;
 
   constructor() {
@@ -61,6 +64,19 @@ class AudioEngine {
   requestRebuild(design: Design) {
     this.lastDesign = design;
     if (!this.ctx) return; // nothing audible yet; start() will build fresh
+    const incoming = new Map(design.nodes.map(n => [n.id, n.type]));
+    const removing = Array.from(this.units.keys()).filter(id => incoming.get(id) !== this.unitTypes.get(id));
+    if (removing.length > 0 && !this.fadePending) {
+      this.fadePending = true;
+      for (const id of removing) {
+        const unit = this.units.get(id);
+        try {
+          unit?.prepareTeardown?.(this.ctx.currentTime);
+        } catch {
+          /* one bad pre-fade must not abort the rebuild burst */
+        }
+      }
+    }
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => {
       if (this.lastDesign) this.rebuild(this.lastDesign);
@@ -68,60 +84,196 @@ class AudioEngine {
   }
 
   private rebuild(design: Design) {
+    this.fadePending = false;
     const ctx = this.ctx;
     if (!ctx) return;
 
-    for (const [id, u] of this.units.entries()) {
+    try {
+      this.spliceRebuild(ctx, design);
+    } catch (e) {
+      console.warn('[rebuild] splice failed, full rebuild', e);
+      this.fullRebuild(ctx, design);
+    }
+  }
+
+  private spliceRebuild(ctx: AudioContext, design: Design) {
+    const nextNodes = new Map(design.nodes.map(n => [n.id, n]));
+    const removedIds = new Set<string>();
+    for (const id of this.units.keys()) {
+      const next = nextNodes.get(id);
+      if (!next || this.unitTypes.get(id) !== next.type) removedIds.add(id);
+    }
+
+    const createdNodes: NodeInstance[] = [];
+    const keptNodes: NodeInstance[] = [];
+    for (const node of design.nodes) {
+      if (!this.units.has(node.id) || removedIds.has(node.id)) {
+        createdNodes.push(node);
+      } else {
+        keptNodes.push(node);
+      }
+    }
+
+    for (const id of removedIds) {
+      const unit = this.units.get(id);
       try {
-        u.dispose();
-      } catch (e) {
+        unit?.dispose();
+      } catch {
+        /* bare .disconnect() on an unwired node throws in some browsers; ignore */
+      }
+      this.units.delete(id);
+      this.unitTypes.delete(id);
+    }
+
+    const createdIds = new Set(createdNodes.map(n => n.id));
+    const keptIds = new Set(keptNodes.map(n => n.id));
+
+    for (const node of createdNodes) {
+      this.createUnit(ctx, node);
+    }
+
+    for (const node of keptNodes) {
+      const unit = this.units.get(node.id);
+      if (unit) this.bindUnitParams(unit, node);
+    }
+
+    const beforeWires = this.physicalWireMap(this.lastBuilt?.wires ?? []);
+    const afterWires = this.physicalWireMap(design.wires);
+    let wiresDisconnected = 0;
+    let wiresConnected = 0;
+
+    for (const [key, wire] of beforeWires.entries()) {
+      if (afterWires.has(key)) continue;
+      wiresDisconnected += 1;
+      if (keptIds.has(wire.from.nodeId) && keptIds.has(wire.to.nodeId)) {
+        this.disconnectWire(wire);
+      }
+    }
+
+    for (const [key, wire] of afterWires.entries()) {
+      const endpointCreated = createdIds.has(wire.from.nodeId) || createdIds.has(wire.to.nodeId);
+      if (beforeWires.has(key) && !endpointCreated) continue;
+      this.connectWire(wire);
+      wiresConnected += 1;
+    }
+
+    this.rebuildTriggerMap(design);
+    this.refreshServices(ctx, design);
+    this.lastBuilt = design;
+
+    console.debug('[rebuild] splice', {
+      created: createdNodes.length,
+      removed: removedIds.size,
+      kept: keptNodes.length,
+      'wires+': wiresConnected,
+      'wires-': wiresDisconnected,
+    });
+  }
+
+  private fullRebuild(ctx: AudioContext, design: Design) {
+    for (const unit of this.units.values()) {
+      try {
+        unit.dispose();
+      } catch {
         /* bare .disconnect() on an unwired node throws in some browsers; ignore */
       }
     }
     this.units.clear();
+    this.unitTypes.clear();
 
+    for (const node of design.nodes) {
+      this.createUnit(ctx, node);
+    }
+
+    for (const wire of design.wires) {
+      if ((wire.kind ?? 'audio') === 'trigger') continue;
+      this.connectWire(wire);
+    }
+
+    this.rebuildTriggerMap(design);
+    this.refreshServices(ctx, design);
+    this.lastBuilt = design;
+  }
+
+  private createUnit(ctx: AudioContext, node: NodeInstance) {
+    const spec = registry[node.type];
+    if (!spec) return;
+    const unit = spec.createAudio(ctx, node.id);
+    this.bindUnitParams(unit, node);
+    this.units.set(node.id, unit);
+    this.unitTypes.set(node.id, node.type);
+  }
+
+  private bindUnitParams(unit: AudioUnit, node: NodeInstance) {
+    const spec = registry[node.type];
+    if (!spec) return;
+    for (const p of spec.params) {
+      const value = node.params[p.id] ?? p.default;
+      if (!Number.isFinite(value)) {
+        console.warn('[bind] non-finite value for', node.id, p.id);
+      } else {
+        unit.bind(p.id, value);
+      }
+    }
+  }
+
+  private physicalWireMap(wires: Wire[]) {
+    const map = new Map<string, Wire>();
+    for (const wire of wires) {
+      const kind = wire.kind ?? 'audio';
+      if (kind !== 'audio' && kind !== 'control') continue;
+      map.set(this.wireKey(wire), wire);
+    }
+    return map;
+  }
+
+  private wireKey(wire: Wire) {
+    return `${wire.kind ?? 'audio'}|${wire.from.nodeId}|${wire.from.pinId}|${wire.to.nodeId}|${wire.to.pinId}`;
+  }
+
+  private connectWire(wire: Wire) {
+    const out = this.units.get(wire.from.nodeId)?.outputs[wire.from.pinId];
+    const inp = this.units.get(wire.to.nodeId)?.inputs[wire.to.pinId];
+    if (out && inp) out.connect(inp);
+  }
+
+  private disconnectWire(wire: Wire) {
+    const out = this.units.get(wire.from.nodeId)?.outputs[wire.from.pinId];
+    const inp = this.units.get(wire.to.nodeId)?.inputs[wire.to.pinId];
+    if (!out || !inp) return;
+    try {
+      out.disconnect(inp);
+    } catch {
+      /* disconnecting an already-disconnected endpoint is harmless */
+    }
+  }
+
+  private rebuildTriggerMap(design: Design) {
+    this.triggerMap.clear();
+    for (const wire of design.wires) {
+      if (wire.kind !== 'trigger') continue;
+      const handler = this.units.get(wire.to.nodeId)?.triggerIns?.[wire.to.pinId];
+      if (!handler) continue;
+      const key = `${wire.from.nodeId}:${wire.from.pinId}`;
+      const arr = this.triggerMap.get(key) || [];
+      arr.push(handler);
+      this.triggerMap.set(key, arr);
+    }
+  }
+
+  private refreshServices(ctx: AudioContext, design: Design) {
     const meters = new Map<string, AnalyserNode>();
     const scopes = new Map<string, AnalyserNode>();
     const eqFilters = new Map<string, BiquadFilterNode[]>();
     const eqAnalysers = new Map<string, AnalyserNode>();
 
-    for (const n of design.nodes) {
-      const spec = registry[n.type];
-      if (!spec) continue;
-      const unit = spec.createAudio(ctx, n.id);
-      for (const p of spec.params) {
-        const value = n.params[p.id] ?? p.default;
-        if (!Number.isFinite(value)) {
-          console.warn('[bind] non-finite value for', n.id, p.id);
-        } else {
-          unit.bind(p.id, value);
-        }
-      }
-      this.units.set(n.id, unit);
+    for (const [id, unit] of this.units.entries()) {
       const first = Object.values(unit.analysers)[0];
-      if (first) meters.set(n.id, first);
-      if (unit.scope) scopes.set(n.id, unit.scope);
+      if (first) meters.set(id, first);
+      if (unit.scope) scopes.set(id, unit.scope);
       if (unit.eqFilters) {
-        eqFilters.set(n.id, unit.eqFilters);
-        if (first) eqAnalysers.set(n.id, first);
-      }
-    }
-
-    this.triggerMap.clear();
-
-    for (const w of design.wires) {
-      if (w.kind === 'trigger') {
-        const handler = this.units.get(w.to.nodeId)?.triggerIns?.[w.to.pinId];
-        if (handler) {
-          const key = `${w.from.nodeId}:${w.from.pinId}`;
-          const arr = this.triggerMap.get(key) || [];
-          arr.push(handler);
-          this.triggerMap.set(key, arr);
-        }
-      } else {
-        const out = this.units.get(w.from.nodeId)?.outputs[w.from.pinId];
-        const inp = this.units.get(w.to.nodeId)?.inputs[w.to.pinId];
-        if (out && inp) out.connect(inp);
+        eqFilters.set(id, unit.eqFilters);
+        if (first) eqAnalysers.set(id, first);
       }
     }
 

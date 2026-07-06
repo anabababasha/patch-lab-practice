@@ -293,6 +293,7 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
 
   let tuneCents = 0;
   let choke = true;
+  let muted = false;
   let disposed = false;
 
   type SamplerVoice = {
@@ -333,6 +334,7 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
 
   const spawn = (time: number) => {
     if (disposed) return;
+    if (muted) return;
     const entry = mediaCache.get(nodeId);
     if (!entry) return;
     
@@ -367,6 +369,11 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
       trig: (time) => spawn(time ?? ctx.currentTime),
     },
     bind(id, v) {
+      if (id === 'muted') {
+        const m = v > 0.5;
+        if (m && !muted) stopActive();
+        muted = m;
+      }
       if (id === 'level') {
         volume = v;
         setNow(level.gain, dbToGain(v), ctx);
@@ -1072,6 +1079,7 @@ export function createAnalyzer(ctx: AudioContext): AudioUnit {
 
 export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
   const input = ctx.createGain();
+  input.gain.value = 0;
   const loopGain = ctx.createGain();
   const an = makeAnalyser(ctx);
   const speeds = [0.5, 1, 2];
@@ -1082,6 +1090,7 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
   looperService.ensureEntry(ctx, nodeId).then((entry) => {
     if (disposed) return;
     input.connect(entry.tap.node);
+    input.gain.setTargetAtTime(1, ctx.currentTime, 0.005);
     entry.bus.connect(loopGain);
     looperService.reattachPlayback(ctx, nodeId);
   });
@@ -1094,6 +1103,10 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
       if (paramId === 'loopLevel') loopGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
       if (paramId === 'sync') looperService.setSync(nodeId, value > 0.5);
       if (paramId === 'speed') looperService.setSpeed(nodeId, speeds[clamp(Math.round(value), 0, speeds.length - 1)]);
+    },
+    prepareTeardown(when) {
+      input.gain.cancelScheduledValues(when);
+      input.gain.setTargetAtTime(0, when, 0.004);
     },
     dispose() {
       disposed = true;
@@ -1150,7 +1163,7 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
   limiter.attack.value = 0.003;
   limiter.release.value = 0.25;
   const mute = ctx.createGain();
-  mute.gain.value = 1;
+  mute.gain.value = 0;
 
   level.connect(an);
   an.connect(limiter);
@@ -1164,6 +1177,10 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
     bind(id, v) {
       if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
       if (id === 'muted') mute.gain.setTargetAtTime(v > 0.5 ? 0 : 1, ctx.currentTime, 0.015);
+    },
+    prepareTeardown(when) {
+      mute.gain.cancelScheduledValues(when);
+      mute.gain.setTargetAtTime(0, when, 0.004);
     },
     dispose() {
       disconnectNode(level);

@@ -41,6 +41,8 @@ export interface AudioUnit {
   eqFilters?: BiquadFilterNode[];
   /** optional event triggers, e.g. envelope fire */
   triggerIns?: Record<string, (time?: number) => void>;
+  /** optional pre-teardown fade for persistent graph boundaries */
+  prepareTeardown?(when: number): void;
   dispose(): void;
 }
 

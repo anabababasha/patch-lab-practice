@@ -585,6 +585,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
       : midiStatus.state === 'enabled'
         ? `MIDI: ${midiStatus.inputCount} inputs`
         : 'MIDI: not enabled';
+  const isSampler = node.type === 'sampler';
   const computerKeysOn = (node.params.computer ?? 0) > 0.5;
   const nodeMuted = (node.params.muted ?? 0) > 0.5;
 
@@ -715,6 +716,18 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
               >
                 Load file…
               </button>
+              {isSampler && (
+                <button
+                  className={['pl-mini-btn', 'pl-mute-chip', 'nodrag', nodeMuted ? 'is-on' : ''].join(' ')}
+                  aria-pressed={nodeMuted}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useApp.getState().setParam(id, 'muted', nodeMuted ? 0 : 1);
+                  }}
+                >
+                  Mute
+                </button>
+              )}
               <span className="pl-node__file" title={node.meta?.file} style={{ color: 'var(--signal-2)' }}>
                 file not loaded
               </span>
@@ -730,6 +743,18 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
               >
                 Load file…
               </button>
+              {isSampler && (
+                <button
+                  className={['pl-mini-btn', 'pl-mute-chip', 'nodrag', nodeMuted ? 'is-on' : ''].join(' ')}
+                  aria-pressed={nodeMuted}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    useApp.getState().setParam(id, 'muted', nodeMuted ? 0 : 1);
+                  }}
+                >
+                  Mute
+                </button>
+              )}
               <span className="pl-node__file" title={node.meta?.file}>
                 {node.meta?.file ?? 'no file loaded'}
               </span>
