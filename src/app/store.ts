@@ -161,12 +161,30 @@ export function sanitizeDesign(raw: unknown): Design | null {
     });
   }
 
+  // optional-additive session settings: absent stays absent (pre-5d designs
+  // must round-trip byte-identically)
+  let settings: Design['settings'];
+  if (d.settings && typeof d.settings === 'object') {
+    const raw = d.settings as { bpm?: unknown; sync?: unknown };
+    const out: { bpm?: number; sync?: boolean } = {};
+    if (raw.bpm !== undefined) {
+      if (typeof raw.bpm === 'number' && Number.isFinite(raw.bpm) && raw.bpm >= 40 && raw.bpm <= 240) {
+        out.bpm = raw.bpm;
+      } else {
+        console.warn(`sanitizeDesign: Dropped settings.bpm '${String(raw.bpm)}' — must be a finite number 40–240`);
+      }
+    }
+    if (raw.sync !== undefined) out.sync = Boolean(raw.sync);
+    if (Object.keys(out).length > 0) settings = out;
+  }
+
   return {
     version: 1,
     name: typeof d.name === 'string' ? d.name : 'Untitled system',
     layers: uniqueLayers,
     nodes,
     wires,
+    ...(settings ? { settings } : {}),
   };
 }
 
@@ -258,6 +276,7 @@ interface AppState {
 
   transport: { playing: boolean; bpm: number };
   setBpm(v: number): void;
+  setSessionSync(on: boolean): void;
   toggleTransport(): void;
 }
 
@@ -282,6 +301,10 @@ const snapshot = (d: Design) => {
 };
 
 export const useApp = create<AppState>((set, get) => {
+  const initialDesign = loadSaved() ?? emptyDesign();
+  const initialBpm = initialDesign.settings?.bpm ?? 100;
+  transportService.setBpm(initialBpm);
+
   const commitStructural = (design: Design) => {
     set({ design });
     saveSoon(design);
@@ -313,12 +336,13 @@ export const useApp = create<AppState>((set, get) => {
     };
     set({ design });
     saveSoon(design);
+    engine.trackDesign(design); // sync resolution reads _div/settings — keep them fresh
     engine.setParam(nodeId, paramId, value); // live, no rebuild
     retrace(); // dynamic routing (Router) can change the traced path
   };
 
   return {
-    design: loadSaved() ?? emptyDesign(),
+    design: initialDesign,
     ui: {
       selectedNodeIds: [],
       selectedWireId: null,
@@ -334,7 +358,7 @@ export const useApp = create<AppState>((set, get) => {
     audioRunning: false,
     canUndo: false,
     canRedo: false,
-    transport: { playing: false, bpm: 100 },
+    transport: { playing: false, bpm: initialBpm },
 
     /* -------------------------------------------------------- nodes */
 
@@ -559,6 +583,7 @@ export const useApp = create<AppState>((set, get) => {
       set({ design: nextDesign });
       saveSoon(nextDesign);
 
+      engine.trackDesign(nextDesign);
       for (const [k, v] of Object.entries(values)) {
         engine.setParam(nodeId, k, v);
       }
@@ -828,6 +853,12 @@ export const useApp = create<AppState>((set, get) => {
       }
       snapshot(get().design);
       commitStructural(design);
+      // apply persisted BPM before the debounced rebuild binds synced params
+      const importedBpm = design.settings?.bpm;
+      if (typeof importedBpm === 'number') {
+        transportService.setBpm(importedBpm);
+        set((s) => ({ transport: { ...s.transport, bpm: importedBpm } }));
+      }
       set((s) => ({
         ui: {
           ...s.ui,
@@ -925,7 +956,26 @@ export const useApp = create<AppState>((set, get) => {
     setBpm(v) {
       const clamped = Math.max(40, Math.min(240, v));
       transportService.setBpm(clamped);
-      set((s) => ({ transport: { ...s.transport, bpm: clamped } }));
+      // persisted in design.settings, but NO undo snapshot — BPM scrubbing
+      // must not flood history
+      const design: Design = {
+        ...get().design,
+        settings: { ...get().design.settings, bpm: clamped },
+      };
+      set((s) => ({ design, transport: { ...s.transport, bpm: clamped } }));
+      saveSoon(design);
+      engine.refreshSyncedParams(design);
+    },
+
+    setSessionSync(on) {
+      snapshot(get().design);
+      const design: Design = {
+        ...get().design,
+        settings: { ...get().design.settings, sync: on },
+      };
+      set({ design });
+      saveSoon(design);
+      engine.refreshSyncedParams(design);
     },
 
     async toggleTransport() {

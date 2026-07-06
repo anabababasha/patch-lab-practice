@@ -10,6 +10,7 @@ import { triggerBus } from './triggerBus';
 import { recorderService } from './recorderService';
 import { looperService } from './looperService';
 import { ensureCaptureWorklet } from './captureWorklet';
+import { resolveParamValue } from './sync';
 
 /**
  * Compile strategy: correctness over cleverness.
@@ -208,7 +209,10 @@ class AudioEngine {
     const spec = registry[node.type];
     if (!spec) return;
     for (const p of spec.params) {
-      const value = node.params[p.id] ?? p.default;
+      const value =
+        p.sync && this.lastDesign
+          ? resolveParamValue(node, p, this.lastDesign, transportService.bpm)
+          : node.params[p.id] ?? p.default;
       if (!Number.isFinite(value)) {
         console.warn('[bind] non-finite value for', node.id, p.id);
       } else {
@@ -287,13 +291,59 @@ class AudioEngine {
     midiService.prune(new Set(design.nodes.map(n => n.id)));
   }
 
+  /** Param-path design update: keeps sync resolution fresh WITHOUT scheduling a rebuild. */
+  trackDesign(design: Design) {
+    this.lastDesign = design;
+  }
+
   /** Live, smoothed, no rebuild. */
   setParam(nodeId: string, paramId: string, value: number) {
     if (!Number.isFinite(value)) {
       console.warn('[bind] non-finite value for', nodeId, paramId);
       return;
     }
-    this.units.get(nodeId)?.bind(paramId, value);
+    const unit = this.units.get(nodeId);
+    if (!unit) return;
+    const node = this.lastDesign?.nodes.find((n) => n.id === nodeId);
+    const spec = node ? registry[node.type] : undefined;
+    const pSpec = spec?.params.find((p) => p.id === paramId);
+
+    // Tempo-syncable base param: the unit receives the resolved value
+    if (node && pSpec?.sync && this.lastDesign) {
+      const resolved = resolveParamValue(node, pSpec, this.lastDesign, transportService.bpm);
+      if (Number.isFinite(resolved)) unit.bind(paramId, resolved);
+      return;
+    }
+
+    unit.bind(paramId, value);
+
+    // A division change immediately re-binds its base param's resolved value
+    if (node && spec && this.lastDesign && paramId.endsWith('_div')) {
+      const base = spec.params.find((p) => p.id === paramId.slice(0, -4));
+      if (base?.sync) {
+        const resolved = resolveParamValue(node, base, this.lastDesign, transportService.bpm);
+        if (Number.isFinite(resolved)) unit.bind(base.id, resolved);
+      }
+    }
+  }
+
+  /** Re-bind every tempo-syncable param at its currently-resolved value
+   *  (synced → BPM-derived, free → stored). Smooth bind path only — no rebuild. */
+  refreshSyncedParams(design?: Design) {
+    if (design) this.lastDesign = design;
+    const d = this.lastDesign;
+    if (!d) return;
+    for (const node of d.nodes) {
+      const spec = registry[node.type];
+      if (!spec) continue;
+      const unit = this.units.get(node.id);
+      if (!unit) continue;
+      for (const p of spec.params) {
+        if (!p.sync) continue;
+        const resolved = resolveParamValue(node, p, d, transportService.bpm);
+        if (Number.isFinite(resolved)) unit.bind(p.id, resolved);
+      }
+    }
   }
 
   emitTrigger(nodeId: string, pinId: string, time?: number) {

@@ -23,6 +23,9 @@ export interface ParamSpec {
   dynamicOptions?: 'midiInputs';
   selectStyle?: 'segment' | 'dropdown';
   hidden?: boolean;
+  /** tempo-syncable: the unit the resolved value is delivered in, and the
+   *  DIVISIONS index used when the param sits on Auto with session Sync on */
+  sync?: { kind: 'hz' | 'ms'; defaultDiv: number };
 }
 
 /** Contract every audio component factory fulfils. */
@@ -111,6 +114,8 @@ export interface Design {
   layers?: Layer[];
   nodes: NodeInstance[];
   wires: Wire[];
+  /** optional-additive session settings; absent in pre-5d designs */
+  settings?: { bpm?: number; sync?: boolean };
 }
 
 export const pinKey = (r: PinRef) => `${r.nodeId}:${r.pinId}`;

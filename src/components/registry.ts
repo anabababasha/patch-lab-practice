@@ -25,6 +25,7 @@ import {
   createStepSequencer,
   createLooper,
 } from '../audio/units';
+import { DIVISIONS } from '../audio/sync';
 
 /* ------------------------------------------------------------ helpers */
 
@@ -369,13 +370,15 @@ export const registry: Record<string, ComponentSpec> = {
         step: 0.05,
         default: 2,
         taper: 'log',
+        sync: { kind: 'hz', defaultDiv: 4 /* 1/4 */ },
       },
+      { id: 'rate_div', label: 'Rate sync', unit: '', min: 0, max: 1 + DIVISIONS.length, step: 1, default: 0, hidden: true },
       pct('depth', 'Depth', 50),
     ],
     internalRouting: {},
     help: {
       summary: 'Low-frequency oscillator — a control signal, not audio. Wire its dashed Mod Out into a Mod input to animate a parameter.',
-      tips: ['LFO → Gain Mod = tremolo.', 'LFO → Filter Mod = auto-wah.', 'LFO → Delay Mod = chorus/vibrato.', 'One LFO can fan out to several Mod inputs.'],
+      tips: ['LFO → Gain Mod = tremolo.', 'LFO → Filter Mod = auto-wah.', 'LFO → Delay Mod = chorus/vibrato.', 'One LFO can fan out to several Mod inputs.', 'Sync locks Rate to the tempo — Free ignores it; Auto follows the session Sync switch.'],
       flows: [
         { title: 'Tremolo', chain: [{label:'LFO'}, {label:'Gain · Mod', kind:'control'}] },
         { title: 'Auto-wah', chain: [{label:'LFO'}, {label:'Filter · Mod', kind:'control'}] }
@@ -595,7 +598,9 @@ export const registry: Record<string, ComponentSpec> = {
         step: 1,
         default: 250,
         taper: 'log',
+        sync: { kind: 'ms', defaultDiv: 6 /* 1/8 */ },
       },
+      { id: 'time_div', label: 'Time sync', unit: '', min: 0, max: 1 + DIVISIONS.length, step: 1, default: 0, hidden: true },
       pct('feedback', 'Feedback', 30),
       pct('mix', 'Mix', 30),
       pct('modAmt', 'Mod Amt', 0),
@@ -603,7 +608,7 @@ export const registry: Record<string, ComponentSpec> = {
     internalRouting: { in: ['out'], mod: ['out'] },
     help: {
       summary: 'Echo with feedback and wet/dry mix. Its Mod input wobbles the delay time — small amounts give chorus and vibrato.',
-      tips: ['Feedback above 70 % builds up fast — watch the meters.', '1–20 ms + modulation = chorus', '100 ms+ = distinct echoes.'],
+      tips: ['Feedback above 70 % builds up fast — watch the meters.', '1–20 ms + modulation = chorus', '100 ms+ = distinct echoes.', 'Sync locks Time to the tempo — Free ignores it; Auto follows the session Sync switch.'],
     },
     createAudio: createDelay,
   },

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/store';
 import { midiService } from '../audio/midiService';
+import { DIVISION_OPTIONS, divisionFor, syncedValue } from '../audio/sync';
 import { registry } from '../components/registry';
 import type { ParamSpec } from '../lib/types';
 import {
@@ -23,6 +24,10 @@ const decimalsForStep = (step: number) => {
 
 const displayNumber = (value: number, step: number) =>
   Number(value.toFixed(Math.min(6, decimalsForStep(step)))).toString();
+
+/** locked-field readout: resolved value in the param's unit, e.g. `2.00 Hz` / `300 ms` */
+const displaySynced = (value: number, spec: ParamSpec) =>
+  spec.sync?.kind === 'hz' ? `${value.toFixed(2)} Hz` : `${Math.round(value)} ms`;
 
 type NumberDragState = {
   pointerId: number;
@@ -47,6 +52,14 @@ function ParamField({
   const beginParamGesture = useApp((s) => s.beginParamGesture);
   const setParamLive = useApp((s) => s.setParamLive);
   const finishParamGesture = useApp((s) => s.finishParamGesture);
+  const divParamId = `${spec.id}_div`;
+  const divValue = useApp((s) => {
+    if (!spec.sync) return 0;
+    const n = s.design.nodes.find((nd) => nd.id === nodeId);
+    return Math.round(n?.params[divParamId] ?? 0);
+  });
+  const sessionSync = useApp((s) => s.design.settings?.sync ?? false);
+  const bpm = useApp((s) => s.transport.bpm);
   const [stagedValue, setStagedValue] = useState<string | null>(null);
   const valueRef = useRef(value);
   const dragRef = useRef<NumberDragState | null>(null);
@@ -71,7 +84,12 @@ function ParamField({
   }, [finishParamGesture, nodeId, spec.id]);
 
   const taper = spec.taper ?? 'lin';
-  const norm = toNorm(value, spec.min, spec.max, taper);
+
+  // effective sync state: non-null division = locked to tempo, value resolved
+  const division = spec.sync ? divisionFor(divValue, spec, sessionSync) : null;
+  const locked = division !== null;
+  const shownValue = division ? syncedValue(spec, division.beats, bpm) : value;
+  const norm = toNorm(shownValue, spec.min, spec.max, taper);
 
   const sanitize = (v: number, step = spec.step) =>
     clamp(roundToStep(v, step), spec.min, spec.max);
@@ -89,6 +107,7 @@ function ParamField({
   };
 
   const reset = () => {
+    if (locked) return;
     setStagedValue(null);
     commit(spec.default);
   };
@@ -128,6 +147,7 @@ function ParamField({
         max={1000}
         step={1}
         value={Math.round(norm * 1000)}
+        disabled={locked}
         onPointerDown={() => {
           beginParamGesture(nodeId, spec.id);
           sliderGestureRef.current = true;
@@ -151,6 +171,14 @@ function ParamField({
         }}
         aria-label={spec.label}
       />
+      {locked && division ? (
+        <span
+          className="pl-param__locked"
+          title="Synced to tempo — set the division to Free to edit"
+        >
+          {displaySynced(shownValue, spec)} · {division.label}
+        </span>
+      ) : (
       <input
         className="pl-param__number"
         type="text"
@@ -255,6 +283,22 @@ function ParamField({
         title={formatValue(value, spec.unit, spec.step)}
         aria-label={`${spec.label} value`}
       />
+      )}
+      {spec.sync && (
+        <select
+          className="pl-param__div"
+          value={divValue}
+          onChange={(e) => setParam(nodeId, divParamId, Number(e.target.value))}
+          aria-label={`${spec.label} sync division`}
+          title="Tempo sync — Auto follows the session Sync switch"
+        >
+          {DIVISION_OPTIONS.map((label, i) => (
+            <option key={label} value={i}>
+              {label}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

@@ -10,6 +10,8 @@ export function TopBar() {
   const setAudioRunning = useApp((s) => s.setAudioRunning);
   const transport = useApp((s) => s.transport);
   const setBpm = useApp((s) => s.setBpm);
+  const sessionSync = useApp((s) => s.design.settings?.sync ?? false);
+  const setSessionSync = useApp((s) => s.setSessionSync);
   const toggleTransport = useApp((s) => s.toggleTransport);
   const undo = useApp((s) => s.undo);
   const redo = useApp((s) => s.redo);
@@ -80,15 +82,23 @@ export function TopBar() {
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span style={{ color: 'var(--text-disabled)', fontSize: '11px' }}>BPM</span>
-          <input 
-            type="number" 
-            value={transport.bpm} 
-            min={40} max={240} 
+          <input
+            type="number"
+            value={transport.bpm}
+            min={40} max={240}
             onChange={e => setBpm(Number(e.target.value))}
             style={{ width: '48px', background: 'var(--surface-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)', font: '450 12px var(--font-data)', borderRadius: '4px', padding: '2px 4px', textAlign: 'center' }}
             aria-label="BPM"
           />
         </div>
+        <button
+          className={['pl-mini-btn', 'pl-sync-chip', sessionSync ? 'is-on' : ''].join(' ')}
+          aria-pressed={sessionSync}
+          onClick={() => setSessionSync(!sessionSync)}
+          title="Session tempo sync — the default for params on Auto"
+        >
+          Sync
+        </button>
       </div>
       </div>
       <button

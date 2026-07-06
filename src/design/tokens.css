@@ -689,6 +689,41 @@ body {
   font-family: var(--font-ui);
 }
 
+/* tempo-sync division select — compact, sits after the value control */
+.pl-param__div {
+  flex: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font: 500 11px var(--font-data);
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.pl-param__div:hover {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+/* tempo-locked value readout — replaces the numeric input while synced */
+.pl-param__locked {
+  flex: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font: 500 12px var(--font-data);
+  font-variant-numeric: tabular-nums;
+  padding: 4px 6px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.pl-param__slider:disabled {
+  opacity: 0.45;
+}
+
 .pl-param__value {
   width: 74px;
   flex: none;
@@ -916,6 +951,17 @@ body {
   color: var(--danger);
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+}
+
+/* session tempo-sync chip (TopBar) — mute-chip shape, transport accent when on */
+.pl-sync-chip {
+  min-width: 52px;
+}
+
+.pl-sync-chip.is-on {
+  color: var(--signal-1);
+  border-color: var(--signal-1);
+  background: color-mix(in srgb, var(--signal-1) 14%, var(--surface));
 }
 
 .pl-seq-grid {
