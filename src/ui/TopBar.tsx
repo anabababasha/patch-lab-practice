@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useApp } from '../app/store';
 import { engine } from '../audio/engine';
+import { version } from '../../package.json';
 
 export function TopBar() {
   const name = useApp((s) => s.design.name);
@@ -59,7 +60,16 @@ export function TopBar() {
         spellCheck={false}
       />
       <div className="pl-topbar__spacer" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '16px' }}>
+        <span style={{
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          color: 'var(--text-disabled)',
+          opacity: 0.6
+        }}>
+          v{version} &middot; {import.meta.env.DEV ? `dev ${(__BUILD_TIME__ as string)}` : import.meta.env.VITE_GIT_HASH || 'prod'}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button 
           className="pl-btn"
           style={{ color: transport.playing ? 'var(--signal-1)' : undefined }}
@@ -79,6 +89,7 @@ export function TopBar() {
             aria-label="BPM"
           />
         </div>
+      </div>
       </div>
       <button
         className={['pl-start', audioRunning ? 'is-running' : ''].join(' ')}

@@ -1,5 +1,6 @@
 import { Design, PinRef } from '../lib/types';
 import { registry, resolveRouting } from '../components/registry';
+import { mediaCache } from '../audio/mediaCache';
 
 export interface Issue {
   id: string;
@@ -195,6 +196,13 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
           message: `${node.label} will never fire — wire a Trigger Pad (or later, MIDI) to its Trig input.`,
           nodeId: node.id,
           pin: { nodeId: node.id, pinId: 'trig' },
+        });
+      } else if (node.meta?.file && !mediaCache.has(node.id)) {
+        issues.push({
+          id: `sampler-reload-${node.id}`,
+          severity: 'info',
+          message: `${node.label} references '${node.meta.file}' but audio isn't loaded (media isn't saved with designs) — click Load file.`,
+          nodeId: node.id,
         });
       } else if (!node.meta?.file) {
         issues.push({

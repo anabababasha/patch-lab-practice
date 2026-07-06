@@ -231,7 +231,9 @@ class LooperService {
   reattachPlayback(ctx: AudioContext, nodeId: string) {
     const entry = this.getM(ctx).get(nodeId);
     if (!entry?.buffer || entry.state !== 'playing' || !entry.source) return;
-    this.startPlayback(ctx, entry, ctx.currentTime, this.getPlaybackOffset(entry, ctx.currentTime));
+    // The source never actually stopped during rebuild, it just played into a disconnected bus.
+    // Reconnecting the bus (done by LooperUnit) is sufficient; restarting the source causes a glitch
+    // and clobbers phase alignment.
   }
 
   reverse(nodeId: string) {

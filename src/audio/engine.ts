@@ -9,6 +9,7 @@ import { transportService } from './transportService';
 import { triggerBus } from './triggerBus';
 import { recorderService } from './recorderService';
 import { looperService } from './looperService';
+import { ensureCaptureWorklet } from './captureWorklet';
 
 /**
  * Compile strategy: correctness over cleverness.
@@ -46,8 +47,9 @@ class AudioEngine {
   async start(design: Design): Promise<boolean> {
     const ctx = this.ensure();
     this.lastDesign = design;
-    this.rebuild(design);
     await ctx.resume();
+    await ensureCaptureWorklet(ctx);
+    this.rebuild(design);
     return ctx.state === 'running';
   }
 

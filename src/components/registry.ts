@@ -793,6 +793,7 @@ export const registry: Record<string, ComponentSpec> = {
       tips: [
         'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
         'Output is silent while empty or stopped; fan out the dry source if you want live monitoring.',
+        'Loop several sources at once: sum them with a Mixer first — Mix Out → Input.',
         'Drag the edges of the waveform to trim the loop - edges snap to zero-crossings so it never clicks.',
         'Normalize, Reverse, trim, and Speed update the playing loop through the loop-only output path.',
         '\u00bd\u00d7 is an octave down, tape-style.',

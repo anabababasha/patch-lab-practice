@@ -10,6 +10,7 @@ import { midiService } from '../../audio/midiService';
 import { scopeService, type ScopeMode } from '../../audio/scopeService';
 import { recorderService } from '../../audio/recorderService';
 import { looperService } from '../../audio/looperService';
+import { mediaCache } from '../../audio/mediaCache';
 import { HEADER_H, ROW_H, hueFor } from '../constants';
 
 import { patterns } from '../../patterns';
@@ -702,18 +703,38 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
       {spec.display === 'media' && (
         <div className="pl-node__extra">
-          <button
-            className="pl-mini-btn nodrag"
-            onClick={(e) => {
-              e.stopPropagation();
-              fileRef.current?.click();
-            }}
-          >
-            Load file…
-          </button>
-          <span className="pl-node__file" title={node.meta?.file}>
-            {node.meta?.file ?? 'no file loaded'}
-          </span>
+          {node.meta?.file && !mediaCache.has(id) ? (
+            <>
+              <button
+                className="pl-mini-btn nodrag is-on"
+                style={{ color: 'var(--signal-2)' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileRef.current?.click();
+                }}
+              >
+                Load file…
+              </button>
+              <span className="pl-node__file" title={node.meta?.file} style={{ color: 'var(--signal-2)' }}>
+                file not loaded
+              </span>
+            </>
+          ) : (
+            <>
+              <button
+                className="pl-mini-btn nodrag"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileRef.current?.click();
+                }}
+              >
+                Load file…
+              </button>
+              <span className="pl-node__file" title={node.meta?.file}>
+                {node.meta?.file ?? 'no file loaded'}
+              </span>
+            </>
+          )}
           <input
             ref={fileRef}
             type="file"

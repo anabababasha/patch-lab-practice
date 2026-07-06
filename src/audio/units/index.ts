@@ -283,7 +283,8 @@ export function createMicIn(ctx: AudioContext): AudioUnit {
 
 export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
   const level = ctx.createGain();
-  level.gain.value = dbToGain(-6);
+  let volume = -6;
+  level.gain.value = dbToGain(volume);
   const an = makeAnalyser(ctx);
   level.connect(an);
 
@@ -337,6 +338,10 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
     
     if (choke) stopActive();
     
+    // Safety: ensure unit-level bus is trigger-ready in case it was ever mutated by transport stops
+    level.gain.cancelScheduledValues(ctx.currentTime);
+    level.gain.setTargetAtTime(dbToGain(volume), ctx.currentTime, 0.003);
+
     const src = ctx.createBufferSource();
     src.buffer = entry.buffer;
     src.detune.value = tuneCents;
@@ -362,7 +367,10 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
       trig: (time) => spawn(time ?? ctx.currentTime),
     },
     bind(id, v) {
-      if (id === 'level') setNow(level.gain, dbToGain(v), ctx);
+      if (id === 'level') {
+        volume = v;
+        setNow(level.gain, dbToGain(v), ctx);
+      }
       if (id === 'tune') tuneCents = v * 100;
       if (id === 'pitchAmt') setNow(pitchScale.gain, v, ctx);
       if (id === 'choke') choke = v > 0.5;
