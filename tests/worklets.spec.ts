@@ -1,5 +1,31 @@
 import { test, expect } from '@playwright/test';
 
+const DETECT_SRC = String.raw`
+function detectClicks(data, sr, startSec, endSec, thr) {
+  thr = thr === undefined ? 0.05 : thr;
+  const start = Math.max(1, Math.floor(startSec * sr));
+  const end = Math.min(data.length, Math.floor(endSec * sr));
+  let maxJump = 0, maxJumpAt = -1, count = 0, lastHit = -1e9;
+  const hits = [];
+  for (let i = start; i < end; i++) {
+    const d = Math.abs(data[i] - data[i - 1]);
+    if (d > maxJump) { maxJump = d; maxJumpAt = i; }
+    if (d > thr) {
+      if (i - lastHit > 32) { count++; if (hits.length < 8) hits.push({ atSec: i / sr, delta: d }); }
+      lastHit = i;
+    }
+  }
+  return { maxJump, maxJumpAtSec: maxJumpAt / sr, count, hits };
+}
+function rmsDbFile(data, sr, startSec, endSec) {
+  const start = Math.floor(startSec * sr);
+  const end = Math.min(data.length, Math.floor(endSec * sr));
+  let sum = 0;
+  for (let i = start; i < end; i++) sum += data[i] * data[i];
+  return 10 * Math.log10(Math.sqrt(sum / Math.max(1, end - start)) + 1e-12);
+}
+`;
+
 test.describe('Grain Delay DSP Worklet', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -454,5 +480,318 @@ test.describe('Buffer Repeater DSP Worklet', () => {
     expect(result.rmsBefore).toBeLessThan(-60);
     expect(result.rmsInside).toBeGreaterThan(-60);
     expect(result.rmsAfter).toBeLessThan(-60);
+  });
+});
+
+test.describe('Grain Delay artifact detector', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(
+      () => (window as unknown as Record<string, unknown>).__plWorkletTest !== undefined,
+    );
+  });
+
+  test('S1 pitch-up read-head overtake stays click-free', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureGrainWorklet, createGrainDelay } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 3, sr);
+      await ensureGrainWorklet(ctx);
+
+      const gd = createGrainDelay(ctx, 'gd-s1');
+      gd.bind('mix', 100);
+      gd.bind('time', 350);
+      gd.bind('size', 700);
+      gd.bind('density', 2);
+      gd.bind('pitch', 12);
+      gd.bind('spray', 0);
+      gd.bind('rndPitch', 0);
+      gd.bind('spread', 0);
+      gd.bind('feedback', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.connect(gd.inputs.in);
+      gd.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      const buffer = await ctx.startRendering();
+      const left = detectClicks(buffer.getChannelData(0), sr, 0.5, 3.0);
+      const right = detectClicks(buffer.getChannelData(1), sr, 0.5, 3.0);
+      return { maxJump: Math.max(left.maxJump, right.maxJump), count: left.count + right.count };
+    }, DETECT_SRC);
+
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+
+  test('S2 freeze read-window integrity keeps frozen cloud audible', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks, rmsDbFile } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureGrainWorklet, createGrainDelay } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 3.5, sr);
+      await ensureGrainWorklet(ctx);
+
+      const gd = createGrainDelay(ctx, 'gd-s2');
+      gd.bind('mix', 100);
+      gd.bind('time', 50);
+      gd.bind('size', 500);
+      gd.bind('density', 2);
+      gd.bind('pitch', 0);
+      gd.bind('spray', 0);
+      gd.bind('rndPitch', 0);
+      gd.bind('spread', 0);
+      gd.bind('feedback', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.connect(gd.inputs.in);
+      gd.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      ctx.suspend(0.6).then(async () => {
+        gd.bind('freeze', 1);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const ch0 = buffer.getChannelData(0);
+      const left = detectClicks(ch0, sr, 1.5, 3.5);
+      const right = detectClicks(buffer.getChannelData(1), sr, 1.5, 3.5);
+      return {
+        rmsDb: rmsDbFile(ch0, sr, 1.5, 3.5),
+        maxJump: Math.max(left.maxJump, right.maxJump),
+        count: left.count + right.count,
+      };
+    }, DETECT_SRC);
+
+    expect(result.rmsDb).toBeGreaterThan(-12);
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+
+  test('S3 density compensation changes without a zipper step', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureGrainWorklet, createGrainDelay } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 2, sr);
+      await ensureGrainWorklet(ctx);
+
+      const gd = createGrainDelay(ctx, 'gd-s3');
+      gd.bind('mix', 100);
+      gd.bind('time', 100);
+      gd.bind('size', 400);
+      gd.bind('density', 2);
+      gd.bind('pitch', 0);
+      gd.bind('spray', 0);
+      gd.bind('rndPitch', 0);
+      gd.bind('spread', 0);
+      gd.bind('feedback', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.connect(gd.inputs.in);
+      gd.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      ctx.suspend(1.0).then(async () => {
+        gd.bind('density', 8);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const ch0 = buffer.getChannelData(0);
+      const ch1 = buffer.getChannelData(1);
+      const left = detectClicks(ch0, sr, 0.8, 1.6);
+      const right = detectClicks(ch1, sr, 0.8, 1.6);
+      const preLeft = detectClicks(ch0, sr, 0.8, 0.999);
+      const preRight = detectClicks(ch1, sr, 0.8, 0.999);
+      return {
+        maxJump: Math.max(left.maxJump, right.maxJump),
+        preMaxJump: Math.max(preLeft.maxJump, preRight.maxJump),
+        count: left.count + right.count,
+      };
+    }, DETECT_SRC);
+
+    expect(result.preMaxJump).toBeLessThan(0.05);
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+});
+
+test.describe('Buffer Repeater artifact detector', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForFunction(
+      () => (window as unknown as Record<string, unknown>).__plWorkletTest !== undefined,
+    );
+  });
+
+  test('S4 retrigger while active fades instead of hard-cutting', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, Math.floor(sr * 2.2), sr);
+      await ensureBufferRepeaterWorklet(ctx);
+
+      const br = createBufferRepeater(ctx, 'br-s4');
+      br.bind('mode', 1);
+      br.bind('gate', 8);
+      br.bind('grid', 2);
+      br.bind('variation', 0);
+      br.bind('pitch', 0);
+      br.bind('pitchDecay', 0);
+      br.bind('decay', 0);
+      br.bind('chance', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      ctx.suspend(0.1).then(async () => {
+        br.triggerIns.trig(0.45);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+      ctx.suspend(0.6506667).then(async () => {
+        br.triggerIns.trig(0.65);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const left = detectClicks(buffer.getChannelData(0), sr, 0.55, 2.0);
+      const right = detectClicks(buffer.getChannelData(1), sr, 0.55, 2.0);
+      return { maxJump: Math.max(left.maxJump, right.maxJump), count: left.count + right.count };
+    }, DETECT_SRC);
+
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+
+  test('S5 long hold auto-releases before the ring laps', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, Math.floor(sr * 6.5), sr);
+      await ensureBufferRepeaterWorklet(ctx);
+
+      const br = createBufferRepeater(ctx, 'br-s5');
+      br.bind('mode', 1);
+      br.bind('grid', 2);
+      br.bind('variation', 0);
+      br.bind('pitch', -12);
+      br.bind('pitchDecay', 0);
+      br.bind('decay', 0);
+      br.bind('chance', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.offset.setValueAtTime(-0.5, 1.2);
+      dc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      ctx.suspend(0.4).then(async () => {
+        br.holdRepeat(true);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const left = detectClicks(buffer.getChannelData(0), sr, 1.0, 6.4);
+      const right = detectClicks(buffer.getChannelData(1), sr, 1.0, 6.4);
+      return { maxJump: Math.max(left.maxJump, right.maxJump), count: left.count + right.count };
+    }, DETECT_SRC);
+
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+
+  test('S6 mode saturation morphs without a level step', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, sr * 2, sr);
+      await ensureBufferRepeaterWorklet(ctx);
+
+      const br = createBufferRepeater(ctx, 'br-s6');
+      br.bind('mode', 0);
+      br.bind('chance', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 1.5;
+      dc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      ctx.suspend(1.0).then(async () => {
+        br.bind('mode', 1);
+        await new Promise((r) => setTimeout(r, 25));
+        void ctx.resume();
+      });
+
+      const buffer = await ctx.startRendering();
+      const left = detectClicks(buffer.getChannelData(0), sr, 0.5, 1.8);
+      const right = detectClicks(buffer.getChannelData(1), sr, 0.5, 1.8);
+      return { maxJump: Math.max(left.maxJump, right.maxJump), count: left.count + right.count };
+    }, DETECT_SRC);
+
+    expect(result.maxJump).toBeLessThan(0.05);
+  });
+
+  test('S7 variation pitch-up does not read ahead of written audio', async ({ page }) => {
+    const result = await page.evaluate(async (detectSrc) => {
+      const { detectClicks } = new Function(detectSrc + '; return { detectClicks, rmsDbFile };')() as any;
+      const { ensureBufferRepeaterWorklet, createBufferRepeater } = (window as unknown as any).__plWorkletTest;
+
+      const sr = 48000;
+      const ctx = new OfflineAudioContext(2, Math.floor(sr * 5.7), sr);
+      await ensureBufferRepeaterWorklet(ctx);
+
+      const br = createBufferRepeater(ctx, 'br-s7');
+      br.bind('mode', 1);
+      br.bind('grid', 0);
+      br.bind('variation', 3);
+      br.bind('pitch', 12);
+      br.bind('gate', 4);
+      br.bind('pitchDecay', 0);
+      br.bind('decay', 0);
+      br.bind('chance', 0);
+
+      const dc = ctx.createConstantSource();
+      dc.offset.value = 0.5;
+      dc.connect(br.inputs.in);
+      br.outputs.out.connect(ctx.destination);
+      dc.start();
+
+      for (let k = 0; k < 6; k++) {
+        const suspendAt = 0.35 + 0.9 * k;
+        const trigAt = 0.45 + 0.9 * k;
+        ctx.suspend(suspendAt).then(async () => {
+          br.triggerIns.trig(trigAt);
+          await new Promise((r) => setTimeout(r, 25));
+          void ctx.resume();
+        });
+      }
+
+      const buffer = await ctx.startRendering();
+      const left = detectClicks(buffer.getChannelData(0), sr, 0.4, 5.6);
+      const right = detectClicks(buffer.getChannelData(1), sr, 0.4, 5.6);
+      return { maxJump: Math.max(left.maxJump, right.maxJump), count: left.count + right.count };
+    }, DETECT_SRC);
+
+    expect(result.maxJump).toBeLessThan(0.05);
   });
 });

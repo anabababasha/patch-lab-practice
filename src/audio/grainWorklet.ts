@@ -8,6 +8,7 @@ class PLGrainDelay extends AudioWorkletProcessor {
     this.ring1 = new Float32Array(1 << 18);
     this.mask = (1 << 18) - 1;
     this.wHead = 0;
+    this.absHead = 0;
     
     // params
     this.p_time = 250;
@@ -21,19 +22,24 @@ class PLGrainDelay extends AudioWorkletProcessor {
     // smoothed
     this.p_feedback = 0.35;
     this.f_feedback = 0.35;
+    this.t_comp = 1 / Math.sqrt(2);
+    this.f_comp = this.t_comp;
     
     this.p_freeze = 0;
     this.f_writeGain = 1;
     
-    // smoothing coeff (10ms @ 48k ~ 480 samples, alpha ~ 0.005)
-    this.alpha = 0.005; 
+    // smoothing coeff: sample-rate-invariant ~5ms time constant
+    this.alpha = 1 - Math.exp(-1 / (0.005 * sampleRate));
     
     this.port.onmessage = (e) => {
       const { id, value } = e.data;
       if (!Number.isFinite(value)) return;
       if (id === 'time') this.p_time = value;
       else if (id === 'size') this.p_size = value;
-      else if (id === 'density') this.p_density = value;
+      else if (id === 'density') {
+        this.p_density = value;
+        this.t_comp = 1 / Math.sqrt(Math.max(1, value));
+      }
       else if (id === 'pitch') this.p_pitch = value;
       else if (id === 'rndPitch') this.p_rndPitch = value;
       else if (id === 'spray') this.p_spray = value;
@@ -52,14 +58,14 @@ class PLGrainDelay extends AudioWorkletProcessor {
     this.maxGrains = 32;
     this.g_active = new Int32Array(this.maxGrains); // 0 or 1
     this.g_pos = new Float32Array(this.maxGrains); // phase (0 to durationFrames)
-    this.g_read = new Float32Array(this.maxGrains); // start position in ring
+    this.g_read = new Float64Array(this.maxGrains); // start position (absolute frames; f64 — f32 quantizes to whole frames after ~12min uptime)
     this.g_rate = new Float32Array(this.maxGrains); // step size
     this.g_dur = new Float32Array(this.maxGrains); // durationFrames
+    this.g_win = new Float32Array(this.maxGrains); // spawn window for freeze wraps
     this.g_panL = new Float32Array(this.maxGrains);
     this.g_panR = new Float32Array(this.maxGrains);
     
     this.nextSpawnTimer = 0;
-    this.oldestIdx = 0;
   }
   
   process(inputs, outputs) {
@@ -78,8 +84,10 @@ class PLGrainDelay extends AudioWorkletProcessor {
     for (let i = 0; i < outL.length; i++) {
       // param smoothing
       this.f_feedback += this.alpha * (this.p_feedback - this.f_feedback);
+      this.f_comp += this.alpha * (this.t_comp - this.f_comp);
       const targetWriteGain = this.p_freeze > 0.5 ? 0 : 1;
       this.f_writeGain += this.alpha * (targetWriteGain - this.f_writeGain);
+      const headStep = targetWriteGain > 0.5 ? 1 : 0;
       
       // spawn logic
       if (this.nextSpawnTimer <= 0) {
@@ -90,29 +98,29 @@ class PLGrainDelay extends AudioWorkletProcessor {
             break;
           }
         }
-        if (gIdx === -1) {
-          gIdx = this.oldestIdx;
-          this.oldestIdx = (this.oldestIdx + 1) % this.maxGrains;
+        
+        if (gIdx !== -1) {
+          const timeFrames = (this.p_time / 1000) * sr;
+          const sprayFrames = (this.p_spray / 1000) * sr;
+          const sprayPick = Math.random() * sprayFrames;
+          const readStart = this.absHead - timeFrames - sprayPick;
+          
+          const pitchCt = this.p_pitch * 100 + (Math.random() * 2 - 1) * this.p_rndPitch;
+          const rate = Math.pow(2, pitchCt / 1200);
+          
+          const spreadNorm = this.p_spread / 100;
+          const rPan = (Math.random() * 2 - 1) * spreadNorm;
+          const angle = (rPan + 1) * Math.PI / 4;
+          
+          this.g_active[gIdx] = 1;
+          this.g_pos[gIdx] = 0;
+          this.g_read[gIdx] = readStart;
+          this.g_rate[gIdx] = rate;
+          this.g_dur[gIdx] = (this.p_size / 1000) * sr;
+          this.g_win[gIdx] = timeFrames + sprayPick;
+          this.g_panL[gIdx] = Math.cos(angle);
+          this.g_panR[gIdx] = Math.sin(angle);
         }
-        
-        const timeFrames = (this.p_time / 1000) * sr;
-        const sprayFrames = (this.p_spray / 1000) * sr;
-        const readStart = this.wHead - timeFrames - (Math.random() * sprayFrames);
-        
-        const pitchCt = this.p_pitch * 100 + (Math.random() * 2 - 1) * this.p_rndPitch;
-        const rate = Math.pow(2, pitchCt / 1200);
-        
-        const spreadNorm = this.p_spread / 100;
-        const rPan = (Math.random() * 2 - 1) * spreadNorm;
-        const angle = (rPan + 1) * Math.PI / 4;
-        
-        this.g_active[gIdx] = 1;
-        this.g_pos[gIdx] = 0;
-        this.g_read[gIdx] = readStart;
-        this.g_rate[gIdx] = rate;
-        this.g_dur[gIdx] = (this.p_size / 1000) * sr;
-        this.g_panL[gIdx] = Math.cos(angle);
-        this.g_panR[gIdx] = Math.sin(angle);
         
         const density = Math.max(0.25, this.p_density);
         const intervalMs = this.p_size / density;
@@ -139,7 +147,19 @@ class PLGrainDelay extends AudioWorkletProcessor {
         if (lutIdx > 4095) lutIdx = 4095;
         const env = this.hann[lutIdx];
         
-        const readPos = this.g_read[j] + pos * this.g_rate[j];
+        let readPos = this.g_read[j] + pos * this.g_rate[j];
+        const dist = this.absHead - readPos;
+        const closing = this.g_rate[j] - headStep;
+        const guard = closing > 0 ? 2 + closing : 2;
+        if (dist <= guard) {
+          if (headStep === 0) {
+            this.g_read[j] -= this.g_win[j];
+            readPos = this.g_read[j] + pos * this.g_rate[j];
+          } else {
+            readPos = this.absHead - 2;
+            this.g_read[j] = readPos - pos * this.g_rate[j];
+          }
+        }
         let r0 = Math.floor(readPos);
         const frac = readPos - r0;
         
@@ -159,7 +179,7 @@ class PLGrainDelay extends AudioWorkletProcessor {
       }
       
       // overlap compensation (density grains overlap) + soft-clip bounds the wet bus
-      const comp = 1 / Math.sqrt(Math.max(1, this.p_density));
+      const comp = this.f_comp;
       const wetL = Math.tanh(sumL * comp);
       const wetR = Math.tanh(sumR * comp);
 
@@ -178,7 +198,10 @@ class PLGrainDelay extends AudioWorkletProcessor {
         this.ring0[this.wHead] = this.ring0[this.wHead] * (1 - this.f_writeGain) + newL * this.f_writeGain;
         this.ring1[this.wHead] = this.ring1[this.wHead] * (1 - this.f_writeGain) + newR * this.f_writeGain;
 
-        this.wHead = (this.wHead + 1) & this.mask;
+        if (headStep > 0) {
+          this.wHead = (this.wHead + 1) & this.mask;
+          this.absHead++;
+        }
       }
     }
     

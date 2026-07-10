@@ -845,6 +845,7 @@ export function createGrainDelay(ctx: AudioContext): AudioUnit {
 
   let bypassOn = false;
   let mixVal = 35;
+  const lastSent: Record<string, number> = {};
 
   const updateMix = () => {
     if (bypassOn) {
@@ -871,6 +872,8 @@ export function createGrainDelay(ctx: AudioContext): AudioUnit {
         mixVal = v;
         updateMix();
       } else {
+        if (lastSent[id] === v) return;
+        lastSent[id] = v;
         worklet.port.postMessage({ id, value: v });
       }
     },
@@ -934,6 +937,7 @@ export function createBufferRepeater(ctx: AudioContext, nodeId: string): AudioUn
   let pitchDecay = 0;
   let decay = 0;
   let mode = 1;
+  const lastSent: Record<string, number> = {};
 
   const interval16 = [4, 8, 16, 32, 64];
 
@@ -1005,6 +1009,8 @@ export function createBufferRepeater(ctx: AudioContext, nodeId: string): AudioUn
         mode = Math.round(v);
         // Gate mode mutes dry OUTSIDE bursts too — the worklet must know immediately,
         // not on the next burst
+        if (lastSent.mode === mode) return;
+        lastSent.mode = mode;
         worklet.port.postMessage({ type: 'mode', mode });
       }
       else if (id === 'bypass') {

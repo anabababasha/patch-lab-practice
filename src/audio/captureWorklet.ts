@@ -5,23 +5,61 @@ class PLCapture extends AudioWorkletProcessor {
   constructor() {
     super();
     this.armed = false;
+    this.batchSize = 2048;
+    this.pool = [];
+    for (let i = 0; i < 8; i++) {
+      this.pool[i] = [new Float32Array(this.batchSize), new Float32Array(this.batchSize)];
+    }
+    this.poolCount = 8;
+    this.buffers = null;
+    this.pos = 0;
+    this.msg = { channels: null, length: 0 };
+    this.transfer = [null, null];
     this.port.onmessage = (e) => {
-      if (e.data.cmd === 'arm') this.armed = true;
-      if (e.data.cmd === 'disarm') {
+      const data = e.data;
+      if (data.recycle) {
+        if (this.poolCount < this.pool.length) {
+          this.pool[this.poolCount] = data.recycle;
+          this.poolCount++;
+        }
+        if (this.armed && !this.buffers) {
+          this.buffers = this.takePair();
+          this.pos = 0;
+        }
+      }
+      if (data.cmd === 'arm') {
+        this.armed = true;
+        this.pos = 0;
+        if (!this.buffers) this.buffers = this.takePair();
+      }
+      if (data.cmd === 'disarm') {
         this.armed = false;
-        // flush remaining
-        if (this.pos > 0) {
-          const out0 = new Float32Array(this.buffers[0].buffer, 0, this.pos);
-          const out1 = new Float32Array(this.buffers[1].buffer, 0, this.pos);
-          this.port.postMessage({ channels: [out0, out1] }, [out0.buffer, out1.buffer]);
-          this.buffers = [new Float32Array(this.batchSize), new Float32Array(this.batchSize)];
+        if (this.pos > 0 && this.buffers) {
+          this.postCurrent(this.pos);
+          this.buffers = this.takePair();
           this.pos = 0;
         }
       }
     };
-    this.batchSize = 2048;
-    this.buffers = [new Float32Array(this.batchSize), new Float32Array(this.batchSize)];
-    this.pos = 0;
+  }
+  takePair() {
+    if (this.poolCount <= 0) return null;
+    this.poolCount--;
+    const pair = this.pool[this.poolCount];
+    this.pool[this.poolCount] = null;
+    return pair;
+  }
+  postCurrent(length) {
+    const pair = this.buffers;
+    if (!pair) return;
+    this.msg.channels = pair;
+    this.msg.length = length;
+    this.transfer[0] = pair[0].buffer;
+    this.transfer[1] = pair[1].buffer;
+    this.port.postMessage(this.msg, this.transfer);
+    this.msg.channels = null;
+    this.transfer[0] = null;
+    this.transfer[1] = null;
   }
   process(inputs) {
     if (!this.armed) return true;
@@ -31,17 +69,25 @@ class PLCapture extends AudioWorkletProcessor {
     const c0 = input[0];
     const c1 = input.length > 1 ? input[1] : input[0];
     if (!c0) return true;
+    
+    let buffers = this.buffers;
+    if (!buffers) {
+      buffers = this.takePair();
+      this.buffers = buffers;
+      this.pos = 0;
+      if (!buffers) return true;
+    }
 
     for (let i = 0; i < c0.length; i++) {
-      this.buffers[0][this.pos] = c0[i];
-      this.buffers[1][this.pos] = c1[i];
+      buffers[0][this.pos] = c0[i];
+      buffers[1][this.pos] = c1[i];
       this.pos++;
       if (this.pos >= this.batchSize) {
-        const out0 = this.buffers[0];
-        const out1 = this.buffers[1];
-        this.port.postMessage({ channels: [out0, out1] }, [out0.buffer, out1.buffer]);
-        this.buffers = [new Float32Array(this.batchSize), new Float32Array(this.batchSize)];
+        this.postCurrent(this.batchSize);
+        buffers = this.takePair();
+        this.buffers = buffers;
         this.pos = 0;
+        if (!buffers) return true;
       }
     }
     return true;
@@ -71,7 +117,14 @@ export class CaptureTap {
     });
     this.onMsg = (e) => {
       if (e.data && e.data.channels) {
-        this.batches.push(e.data.channels);
+        const channels = e.data.channels as Float32Array[];
+        const length = typeof e.data.length === 'number' ? e.data.length : channels[0].length;
+        const copy0 = new Float32Array(length);
+        const copy1 = new Float32Array(length);
+        copy0.set(channels[0].subarray(0, length));
+        copy1.set(channels[1].subarray(0, length));
+        this.batches.push([copy0, copy1]);
+        this.node.port.postMessage({ recycle: channels }, [channels[0].buffer, channels[1].buffer]);
       }
     };
     this.node.port.onmessage = this.onMsg;

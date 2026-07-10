@@ -709,7 +709,8 @@ export const registry: Record<string, ComponentSpec> = {
       tips: [
         'Chance is 0 by default — wire a trigger or raise Chance to ignite it.',
         'Gate shorter than Grid is silent by design.',
-        'Repeats pitch DOWN by slowing playback — each repeat covers less of the slice (the classic blur).'
+        'Repeats pitch DOWN by slowing playback — each repeat covers less of the slice (the classic blur).',
+        'Long holds auto-release after about 5 seconds before the live input can lap the slice.'
       ],
     },
     createAudio: createBufferRepeater,

@@ -14,6 +14,8 @@ import { ensureGrainWorklet } from './grainWorklet';
 import { ensureBufferRepeaterWorklet } from './bufferRepeaterWorklet';
 import { resolveParamValue } from './sync';
 
+const LATENCY_HINT_S = 0.04;
+
 /**
  * Compile strategy: correctness over cleverness.
  *  - structural change  -> debounced 50 ms splice rebuild with full fallback
@@ -40,7 +42,13 @@ class AudioEngine {
 
   private ensure(): AudioContext {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      this.ctx = new AudioContext({ latencyHint: LATENCY_HINT_S });
+      const outputLatency = (this.ctx as AudioContext & { outputLatency?: number }).outputLatency;
+      console.log('[audio] context', {
+        latencyHint: LATENCY_HINT_S,
+        baseLatency: this.ctx.baseLatency,
+        outputLatency,
+      });
       this.ctx.addEventListener('statechange', () => {
         this.onStateChange?.(this.ctx?.state === 'running');
       });
