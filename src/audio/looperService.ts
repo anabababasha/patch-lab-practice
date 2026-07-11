@@ -3,7 +3,7 @@ import { transportService } from './transportService';
 
 export type LooperState = 'empty' | 'recording' | 'playing' | 'stopped';
 
-type PendingAction = 'record' | 'stop_record' | 'reverse' | null;
+type PendingAction = 'record' | 'stop_record' | 'reverse' | 'play' | 'speed' | null;
 
 interface LooperEntry {
   ctx: AudioContext;
@@ -16,6 +16,7 @@ interface LooperEntry {
   startedAt: number; // realtime, for UI elapsed time
   sourceStartTime: number; // AudioContext time, for waveform playhead
   sync: boolean;
+  playSync: boolean;
   speed: number;
   regionStart: number;
   regionEnd: number;
@@ -51,15 +52,23 @@ class LooperService {
   private entries = new Map<string, LooperEntry>();
   private listeners = new Map<
     string,
-    Set<(state: LooperState, startedAt: number, hasLoop: boolean, bufferVersion: number) => void>
+    Set<(
+      state: LooperState,
+      startedAt: number,
+      hasLoop: boolean,
+      bufferVersion: number,
+      pendingAction: PendingAction,
+    ) => void>
   >();
   private canvases = new Map<string, HTMLCanvasElement>();
   private peakCache = new Map<string, PeakCache>();
   private desiredSpeed = new Map<string, number>();
   private desiredSync = new Map<string, boolean>();
+  private desiredPlaySync = new Map<string, boolean>();
   private lastFrame = 0;
   private running = false;
   private colors: LoopColors | null = null;
+  onToast: ((msg: string) => void) | null = null;
 
   private getM(ctx: AudioContext) {
     let m = this.cache.get(ctx);
@@ -88,6 +97,7 @@ class LooperService {
         startedAt: 0,
         sourceStartTime: 0,
         sync: this.desiredSync.get(nodeId) ?? false,
+        playSync: this.desiredPlaySync.get(nodeId) ?? false,
         speed: this.desiredSpeed.get(nodeId) ?? 1,
         regionStart: 0,
         regionEnd: 0,
@@ -102,17 +112,33 @@ class LooperService {
         const pending = entry!.pendingAction;
         if (!pending) return;
         entry!.pendingAction = null;
+        this.notify(nodeId, entry!);
+
+        if (pending === 'play') {
+          this.startTransportLockedPlayback(ctx, nodeId, entry!, time, tickIndex);
+          return;
+        }
+        if (pending === 'speed') {
+          this.applyTransportLockedSpeed(nodeId, entry!, time, tickIndex);
+          return;
+        }
+        if (pending === 'reverse' && entry!.buffer) {
+          this.applyReverse(ctx, nodeId, entry!, entry!.state === 'playing', time);
+          return;
+        }
+
+        if (pending === 'record' && entry!.state === 'empty') {
+          entry!.tap.armAt(time);
+          entry!.state = 'recording';
+          entry!.startedAt = Date.now();
+          this.notify(nodeId, entry!);
+          return;
+        }
+
         const delayMs = Math.max(0, (time - ctx.currentTime) * 1000);
         window.setTimeout(() => {
-          if (pending === 'record' && entry!.state === 'empty') {
-            entry!.tap.arm();
-            entry!.state = 'recording';
-            entry!.startedAt = Date.now();
-            this.notify(nodeId, entry!);
-          } else if (pending === 'stop_record' && entry!.state === 'recording') {
-            this.finalizeRecord(ctx, nodeId, entry!, true, time);
-          } else if (pending === 'reverse' && entry!.buffer) {
-            this.applyReverse(ctx, nodeId, entry!, entry!.state === 'playing', time);
+          if (pending === 'stop_record' && entry!.state === 'recording') {
+            this.finalizeRecord(ctx, nodeId, entry!, true, time, tickIndex);
           }
         }, delayMs);
       });
@@ -149,11 +175,35 @@ class LooperService {
     if (entry) entry.sync = sync;
   }
 
+  setPlaySync(nodeId: string, playSync: boolean) {
+    const entry = this.entries.get(nodeId);
+    if (this.desiredPlaySync.get(nodeId) === playSync && (!entry || entry.playSync === playSync)) {
+      return;
+    }
+
+    this.desiredPlaySync.set(nodeId, playSync);
+    if (!entry || entry.playSync === playSync) return;
+
+    entry.playSync = playSync;
+    if (!playSync && entry.pendingAction === 'play') {
+      entry.pendingAction = null;
+      this.notify(nodeId, entry);
+    }
+  }
+
   setSpeed(nodeId: string, rate: number) {
     const speed = clamp(rate, 0.25, 4);
     this.desiredSpeed.set(nodeId, speed);
     const entry = this.entries.get(nodeId);
     if (!entry) return;
+
+    if (entry.playSync && transportService.running && entry.state === 'playing') {
+      if (entry.speed === speed) return;
+      entry.pendingAction = 'speed';
+      this.notify(nodeId, entry);
+      return;
+    }
+
     const time = entry.ctx.currentTime;
     const offset = entry.source ? this.getPlaybackOffset(entry, time) : entry.regionStart;
     entry.speed = speed;
@@ -281,12 +331,19 @@ class LooperService {
         this.finalizeRecord(ctx, nodeId, entry, false, ctx.currentTime);
       }
     } else if (entry.state === 'playing') {
+      entry.pendingAction = null;
       this.stopPlayback(ctx, entry, ctx.currentTime);
       entry.state = 'stopped';
       this.notify(nodeId, entry);
     } else if (entry.state === 'stopped') {
+      if (entry.playSync && transportService.running) {
+        entry.pendingAction = 'play';
+        this.notify(nodeId, entry);
+        return;
+      }
+
       this.startPlayback(ctx, entry, ctx.currentTime);
-      entry.state = 'playing';
+      if (entry.source) entry.state = 'playing';
       this.notify(nodeId, entry);
     }
   }
@@ -325,7 +382,13 @@ class LooperService {
 
   onState(
     nodeId: string,
-    cb: (state: LooperState, startedAt: number, hasLoop: boolean, bufferVersion: number) => void,
+    cb: (
+      state: LooperState,
+      startedAt: number,
+      hasLoop: boolean,
+      bufferVersion: number,
+      pendingAction: PendingAction,
+    ) => void,
   ) {
     let set = this.listeners.get(nodeId);
     if (!set) {
@@ -334,7 +397,7 @@ class LooperService {
     }
     set.add(cb);
     const entry = this.entries.get(nodeId);
-    if (entry) cb(entry.state, entry.startedAt, !!entry.buffer, entry.bufferVersion);
+    if (entry) cb(entry.state, entry.startedAt, !!entry.buffer, entry.bufferVersion, entry.pendingAction);
     return () => set?.delete(cb);
   }
 
@@ -344,6 +407,7 @@ class LooperService {
     entry: LooperEntry,
     isSynced: boolean,
     startTime: number,
+    tickIndex?: number,
   ) {
     const { channels, sampleRate } = entry.tap.disarm();
     const numFrames = channels[0].length;
@@ -353,7 +417,7 @@ class LooperService {
         const framesPerBeat = sampleRate * (60 / transportService.bpm);
         const framesPerBar = framesPerBeat * 4;
         const bars = Math.round(numFrames / framesPerBar);
-        const targetFrames = Math.max(1, bars) * framesPerBar;
+        const targetFrames = Math.round(Math.max(1, bars) * framesPerBar);
 
         const c0 = new Float32Array(targetFrames);
         const c1 = new Float32Array(targetFrames);
@@ -373,7 +437,11 @@ class LooperService {
       entry.regionEnd = entry.buffer.duration;
       entry.bufferVersion++;
       entry.state = 'playing';
-      this.startPlayback(ctx, entry, startTime);
+      const offset =
+        isSynced && entry.playSync && tickIndex !== undefined
+          ? this.getTransportLockedOffset(entry, tickIndex, entry.speed) ?? entry.regionStart
+          : entry.regionStart;
+      this.startPlayback(ctx, entry, startTime, offset);
     } else {
       entry.buffer = null;
       entry.regionStart = 0;
@@ -381,6 +449,54 @@ class LooperService {
       entry.state = 'empty';
     }
 
+    this.notify(nodeId, entry);
+  }
+
+  private getTransportLockedOffset(entry: LooperEntry, tickIndex: number, speed: number) {
+    if (!entry.buffer || entry.regionEnd <= entry.regionStart) return null;
+    const regionLen = entry.regionEnd - entry.regionStart;
+    const barSec = 240 / transportService.bpm;
+    const loopBars = Math.round((regionLen / barSec) * 16) / 16;
+    const effBars = loopBars / Math.max(0.0001, speed);
+    if (!Number.isFinite(effBars) || effBars <= 0) return null;
+
+    const barsElapsed = tickIndex / 16;
+    const phaseBars = ((barsElapsed % effBars) + effBars) % effBars;
+    return entry.regionStart + (phaseBars / effBars) * regionLen;
+  }
+
+  private startTransportLockedPlayback(
+    ctx: AudioContext,
+    nodeId: string,
+    entry: LooperEntry,
+    time: number,
+    tickIndex: number,
+  ) {
+    const offset = this.getTransportLockedOffset(entry, tickIndex, entry.speed);
+    if (offset === null) {
+      this.onToast?.('Looper has no valid loop to sync.');
+      this.notify(nodeId, entry);
+      return;
+    }
+
+    this.startPlayback(ctx, entry, time, offset);
+    if (entry.source) entry.state = 'playing';
+    this.notify(nodeId, entry);
+  }
+
+  private applyTransportLockedSpeed(nodeId: string, entry: LooperEntry, time: number, tickIndex: number) {
+    if (!entry.source) return;
+    const speed = this.desiredSpeed.get(nodeId) ?? entry.speed;
+    const offset = this.getTransportLockedOffset(entry, tickIndex, speed);
+    if (offset === null) {
+      this.onToast?.('Looper has no valid loop to sync.');
+      this.notify(nodeId, entry);
+      return;
+    }
+
+    entry.speed = speed;
+    this.startPlayback(entry.ctx, entry, time, offset);
+    if (entry.source) entry.state = 'playing';
     this.notify(nodeId, entry);
   }
 
@@ -532,7 +648,7 @@ class LooperService {
     const set = this.listeners.get(nodeId);
     if (set) {
       for (const cb of set) {
-        cb(entry.state, entry.startedAt, !!entry.buffer, entry.bufferVersion);
+        cb(entry.state, entry.startedAt, !!entry.buffer, entry.bufferVersion, entry.pendingAction);
       }
     }
   }

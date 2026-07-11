@@ -207,7 +207,7 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const eqDragLastRef = useRef(0);
 
   const [recState, setRecState] = React.useState<{ state: string, startedAt: number, lastTakeSeconds: number }>({ state: 'idle', startedAt: 0, lastTakeSeconds: 0 });
-  const [loopState, setLoopState] = React.useState<{ state: string, startedAt: number, hasLoop: boolean, bufferVersion: number }>({ state: 'empty', startedAt: 0, hasLoop: false, bufferVersion: 0 });
+  const [loopState, setLoopState] = React.useState<{ state: string, startedAt: number, hasLoop: boolean, bufferVersion: number, pendingAction: string | null }>({ state: 'empty', startedAt: 0, hasLoop: false, bufferVersion: 0, pendingAction: null });
   const [midiVersion, setMidiVersion] = React.useState(0);
   const spec = node ? registry[node.type] : undefined;
   const midiStatus = React.useMemo(() => midiService.getStatus(), [midiVersion]);
@@ -486,8 +486,8 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
 
   React.useEffect(() => {
     if (spec?.display === 'looper') {
-      const unsub = looperService.onState(id, (state, startedAt, hasLoop, bufferVersion) => {
-        setLoopState({ state, startedAt, hasLoop, bufferVersion });
+      const unsub = looperService.onState(id, (state, startedAt, hasLoop, bufferVersion, pendingAction) => {
+        setLoopState({ state, startedAt, hasLoop, bufferVersion, pendingAction });
       });
       return () => { unsub(); };
     }
@@ -938,7 +938,12 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
-              className={`pl-pad nodrag ${loopState.state === 'recording' ? 'is-pressed' : ''}`}
+              className={[
+                'pl-pad',
+                'nodrag',
+                loopState.state === 'recording' ? 'is-pressed' : '',
+                loopState.pendingAction === 'play' ? 'is-pending' : '',
+              ].join(' ')}
               style={{ flex: 1, height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               onPointerDown={(e) => {
                 e.stopPropagation();
@@ -1015,12 +1020,13 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
             </>
           )}
           <div style={{ fontSize: '10px', color: loopState.state === 'recording' ? 'var(--danger)' : 'var(--text-disabled)', textAlign: 'center', height: '12px' }}>
-            {loopState.state === 'empty' && 'empty'}
-            {loopState.state === 'recording' && (
+            {loopState.pendingAction === 'play' && 'play pending'}
+            {loopState.pendingAction !== 'play' && loopState.state === 'empty' && 'empty'}
+            {loopState.pendingAction !== 'play' && loopState.state === 'recording' && (
               <>recording... <span ref={loopTimeRef} style={{ fontVariantNumeric: 'tabular-nums' }}>00:00</span></>
             )}
-            {loopState.state === 'playing' && 'playing'}
-            {loopState.state === 'stopped' && 'stopped'}
+            {loopState.pendingAction !== 'play' && loopState.state === 'playing' && 'playing'}
+            {loopState.pendingAction !== 'play' && loopState.state === 'stopped' && 'stopped'}
           </div>
         </div>
       )}

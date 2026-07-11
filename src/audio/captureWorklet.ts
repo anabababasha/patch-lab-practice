@@ -5,6 +5,7 @@ class PLCapture extends AudioWorkletProcessor {
   constructor() {
     super();
     this.armed = false;
+    this.atFrame = -1;
     this.batchSize = 2048;
     this.pool = [];
     for (let i = 0; i < 8; i++) {
@@ -32,8 +33,12 @@ class PLCapture extends AudioWorkletProcessor {
         this.pos = 0;
         if (!this.buffers) this.buffers = this.takePair();
       }
+      if (data.cmd === 'arm_at') {
+        this.atFrame = Math.round(data.when * sampleRate);
+      }
       if (data.cmd === 'disarm') {
         this.armed = false;
+        this.atFrame = -1;
         if (this.pos > 0 && this.buffers) {
           this.postCurrent(this.pos);
           this.buffers = this.takePair();
@@ -62,13 +67,22 @@ class PLCapture extends AudioWorkletProcessor {
     this.transfer[1] = null;
   }
   process(inputs) {
-    if (!this.armed) return true;
+    if (!this.armed && this.atFrame < 0) return true;
     const input = inputs[0];
     if (!input || input.length === 0) return true;
     
     const c0 = input[0];
     const c1 = input.length > 1 ? input[1] : input[0];
     if (!c0) return true;
+    
+    let startI = 0;
+    if (!this.armed && this.atFrame >= 0) {
+      const wait = this.atFrame - currentFrame;
+      if (wait >= c0.length) return true;
+      startI = wait > 0 ? wait : 0;
+      this.armed = true;
+      this.atFrame = -1;
+    }
     
     let buffers = this.buffers;
     if (!buffers) {
@@ -78,7 +92,7 @@ class PLCapture extends AudioWorkletProcessor {
       if (!buffers) return true;
     }
 
-    for (let i = 0; i < c0.length; i++) {
+    for (let i = startI; i < c0.length; i++) {
       buffers[0][this.pos] = c0[i];
       buffers[1][this.pos] = c1[i];
       this.pos++;
@@ -133,6 +147,11 @@ export class CaptureTap {
   arm() {
     this.batches = [];
     this.node.port.postMessage({ cmd: 'arm' });
+  }
+
+  armAt(when: number) {
+    this.batches = [];
+    this.node.port.postMessage({ cmd: 'arm_at', when });
   }
 
   disarm() {

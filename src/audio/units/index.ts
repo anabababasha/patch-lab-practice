@@ -366,7 +366,8 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
     src.buffer = entry.buffer;
     src.detune.value = tuneCents;
     const hitGain = ctx.createGain();
-    hitGain.gain.value = 1;
+    hitGain.gain.setValueAtTime(0, time);
+    hitGain.gain.linearRampToValueAtTime(1, time + 0.003);
     const voice: SamplerVoice = { source: src, hitGain, startTime: time, cleaned: false };
     
     pitchScale.connect(src.detune);
@@ -1353,6 +1354,7 @@ export function createLooper(ctx: AudioContext, nodeId: string): AudioUnit {
     bind(paramId: string, value: number) {
       if (paramId === 'loopLevel') loopGain.gain.setTargetAtTime(dbToGain(value), ctx.currentTime, 0.02);
       if (paramId === 'sync') looperService.setSync(nodeId, value > 0.5);
+      if (paramId === 'playSync') looperService.setPlaySync(nodeId, value > 0.5);
       if (paramId === 'speed') looperService.setSpeed(nodeId, speeds[clamp(Math.round(value), 0, speeds.length - 1)]);
     },
     prepareTeardown(when) {

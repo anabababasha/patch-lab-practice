@@ -909,12 +909,14 @@ export const registry: Record<string, ComponentSpec> = {
       db('loopLevel', 'Loop', -60, 6, 0),
       { ...db('thruLevel', 'Thru', -60, 6, 0), hidden: true },
       toggle('sync', 'Bar sync', 1),
+      toggle('playSync', 'Play sync', 0),
       select('speed', 'Speed', ['\u00bd\u00d7', '1\u00d7', '2\u00d7'], 1),
     ],
     internalRouting: { in: [] },
     help: {
       summary: 'Captures what flows through it and plays back the loop. Output is the loop only - patch your dry signal in parallel.',
       tips: [
+        "Play sync quantizes PLAY to the next bar and locks the loop's phase to the transport grid - all synced loops land together. Off = free-running (start anywhere, drift free).",
         'Bar sync locks loops to the transport — record a 2-bar phrase over the drum machine and it lands on the grid.',
         'Output is silent while empty or stopped; fan out the dry source if you want live monitoring.',
         'Loop several sources at once: sum them with a Mixer first — Mix Out → Input.',

@@ -1145,3 +1145,4 @@ engine.onStateChange = (running) => useApp.getState().setAudioRunning(running);
 micManager.onDenied = (msg) => useApp.getState().showToast(msg);
 recorderService.onToast = (msg) => useApp.getState().showToast(msg);
 midiService.onToast = (msg) => useApp.getState().showToast(msg);
+looperService.onToast = (msg) => useApp.getState().showToast(msg);

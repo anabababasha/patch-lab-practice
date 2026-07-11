@@ -550,6 +550,22 @@ body {
   border-color: var(--signal-1);
 }
 
+.pl-pad.is-pending {
+  background: var(--signal-1);
+  color: #06120b;
+  border-color: var(--signal-1);
+  animation: pl-pending-pulse 650ms ease-in-out infinite;
+}
+
+@keyframes pl-pending-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .pl-node__extra {
   display: flex;
   align-items: center;
@@ -1426,6 +1442,10 @@ body {
   }
 
   .pl-edge-glow {
+    animation: none;
+  }
+
+  .pl-pad.is-pending {
     animation: none;
   }
 }
