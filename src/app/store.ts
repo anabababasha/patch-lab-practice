@@ -278,6 +278,7 @@ interface UiState {
   panelOpen: boolean;
   panelTab: 'info' | 'check' | 'patterns';
   activeLayerId: string;
+  performOpen: boolean;
 }
 
 interface AppState {
@@ -320,6 +321,7 @@ interface AppState {
   clearTrace(): void;
   clearSelection(): void;
   setPanelOpen(open: boolean): void;
+  setPerformOpen(open: boolean): void;
   setPanelTab(tab: 'info' | 'check' | 'patterns'): void;
 
   beginDrag(): void;
@@ -420,6 +422,7 @@ export const useApp = create<AppState>((set, get) => {
       panelOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
       panelTab: 'info',
       activeLayerId: 'all',
+      performOpen: false,
     },
     audioRunning: false,
     canUndo: history.length > 0,
@@ -866,6 +869,9 @@ export const useApp = create<AppState>((set, get) => {
 
     setPanelOpen(open) {
       set((s) => ({ ui: { ...s.ui, panelOpen: open } }));
+    },
+    setPerformOpen(open) {
+      set((s) => ({ ui: { ...s.ui, performOpen: open } }));
     },
     setPanelTab(tab) {
       set((s) => ({ ui: { ...s.ui, panelTab: tab } }));

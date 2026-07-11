@@ -5,6 +5,7 @@ import { looperService } from '../looperService';
 import { mediaCache, micManager } from '../mediaCache';
 import { midiService } from '../midiService';
 import { recorderService } from '../recorderService';
+import { outputBus } from '../outputBus';
 import { transportService } from '../transportService';
 import { triggerBus } from '../triggerBus';
 
@@ -1421,7 +1422,10 @@ export function createMasterOut(ctx: AudioContext): AudioUnit {
   level.connect(an);
   an.connect(limiter);
   limiter.connect(mute);
-  mute.connect(ctx.destination);
+  // through the engine's output bus so suspend/resume can fade ALL masters
+  // (cross-context guard: offline render harnesses fall back to their own destination)
+  const finalOut = outputBus.node && outputBus.node.context === ctx ? outputBus.node : ctx.destination;
+  mute.connect(finalOut);
 
   return {
     inputs: { in: level },

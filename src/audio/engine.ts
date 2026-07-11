@@ -12,9 +12,13 @@ import { looperService } from './looperService';
 import { ensureCaptureWorklet } from './captureWorklet';
 import { ensureGrainWorklet } from './grainWorklet';
 import { ensureBufferRepeaterWorklet } from './bufferRepeaterWorklet';
+import { outputBus } from './outputBus';
 import { resolveParamValue } from './sync';
 
 const LATENCY_HINT_S = 0.04;
+// master fade bracketing suspend/resume — a bare ctx.suspend() freezes the
+// waveform mid-swing (a pop on hot signals, worst on big systems)
+const OUTPUT_FADE_S = 0.025;
 
 /**
  * Compile strategy: correctness over cleverness.
@@ -54,6 +58,9 @@ class AudioEngine {
         this.onStateChange?.(this.ctx?.state === 'running');
       });
       transportService.attach(this.ctx);
+      outputBus.node = this.ctx.createGain();
+      outputBus.node.gain.value = 1;
+      outputBus.node.connect(this.ctx.destination);
     }
     return this.ctx;
   }
@@ -63,6 +70,14 @@ class AudioEngine {
     const ctx = this.ensure();
     this.lastDesign = design;
     await ctx.resume();
+    // fade the master bus back in — it sits at 0 after a de-clicked suspend
+    const bus = outputBus.node;
+    if (bus) {
+      const t = ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(0, t);
+      bus.gain.linearRampToValueAtTime(1, t + OUTPUT_FADE_S);
+    }
     await ensureCaptureWorklet(ctx);
     await ensureGrainWorklet(ctx);
     await ensureBufferRepeaterWorklet(ctx);
@@ -71,7 +86,18 @@ class AudioEngine {
   }
 
   async suspend(): Promise<void> {
-    await this.ctx?.suspend();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const bus = outputBus.node;
+    if (bus && ctx.state === 'running') {
+      // fade ALL output to true zero, let the fade actually render, THEN freeze
+      const t = ctx.currentTime;
+      bus.gain.cancelScheduledValues(t);
+      bus.gain.setValueAtTime(bus.gain.value, t);
+      bus.gain.linearRampToValueAtTime(0, t + OUTPUT_FADE_S);
+      await new Promise((r) => setTimeout(r, OUTPUT_FADE_S * 1000 + 30));
+    }
+    await ctx.suspend();
   }
 
   /** Call on any node/wire add/remove (or full design swap). */

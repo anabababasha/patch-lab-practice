@@ -1437,7 +1437,10 @@ body {
   .pl-node,
   .pl-btn,
   .pl-name,
-  .pl-palette__item {
+  .pl-palette__item,
+  .pl-perform-exit-progress,
+  .pl-perform-fader-thumb,
+  .pl-perform-mute-btn {
     transition: none;
   }
 
@@ -1445,7 +1448,8 @@ body {
     animation: none;
   }
 
-  .pl-pad.is-pending {
+  .pl-pad.is-pending,
+  .pl-perform-exit-pulse {
     animation: none;
   }
 }
@@ -1498,6 +1502,291 @@ body {
   z-index: 1;
 }
 
+/* --------------------------------------------------- perform view */
+.pl-perform-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--canvas);
+  touch-action: none;
+  overscroll-behavior: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.pl-perform-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.pl-perform-design-name {
+  font: 600 14px var(--font-ui);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.pl-perform-bpm {
+  font: 500 13px var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.pl-perform-exit-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+.pl-perform-exit-btn:hover {
+  background: var(--surface-raised);
+}
+
+.pl-perform-exit-progress {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(var(--signal-4) var(--exit-progress, 0%), transparent 0);
+  z-index: -1;
+  mask: radial-gradient(closest-side, transparent calc(100% - 3px), black calc(100% - 2px));
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), black calc(100% - 2px));
+}
+
+.pl-perform-exit-pulse {
+  animation: pl-exit-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pl-exit-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.pl-perform-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 450 14px var(--font-ui);
+  color: var(--text-secondary);
+}
+
+.pl-perform-strip-container {
+  flex: 1;
+  display: flex;
+  padding: 24px;
+  gap: 16px;
+  overflow-x: auto;
+  align-items: center;
+}
+
+.pl-perform-strip {
+  width: 72px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  height: 100%;
+  max-height: 800px;
+  overflow: hidden;
+}
+
+.pl-perform-strip-labels {
+  padding: 12px 8px;
+  text-align: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.pl-perform-strip-primary {
+  font: 600 12px var(--font-ui);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-perform-strip-secondary {
+  font: 450 10px var(--font-ui);
+  color: var(--text-disabled);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-perform-fader-area {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  min-height: clamp(200px, 45vh, 320px);
+  padding: 20px 0;
+}
+
+.pl-perform-fader-track {
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  width: 4px;
+  background: var(--surface-raised);
+  border-radius: 2px;
+  border: 1px solid var(--border);
+}
+
+.pl-perform-fader-hit {
+  position: absolute;
+  top: 20px;
+  bottom: 20px;
+  width: 48px;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 2;
+}
+
+.pl-perform-fader-thumb {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  width: 32px;
+  height: 16px;
+  background: var(--control);
+  border-radius: 4px;
+  pointer-events: none;
+  transition: background 100ms;
+}
+
+.pl-perform-fader-thumb.is-fine {
+  border: 2px solid var(--signal-4);
+  background: var(--surface);
+}
+
+.pl-perform-pan-area {
+  padding: 12px 8px;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.pl-perform-pan-track {
+  width: 100%;
+  height: 4px;
+  background: var(--surface-raised);
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.pl-perform-pan-hit {
+  position: absolute;
+  inset: -12px 0;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 2;
+}
+
+.pl-perform-pan-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 16px;
+  background: var(--control);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.pl-perform-mutes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.pl-perform-mute-btn {
+  height: 44px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms;
+}
+
+.pl-perform-mute-btn.is-muted {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.pl-perform-mute-btn.is-soloed {
+  background: color-mix(in srgb, var(--signal-3) 20%, transparent);
+  color: var(--signal-3);
+  border-color: var(--signal-3);
+}
+
+.pl-perform-meter-area {
+  padding: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pl-perform-meter-label {
+  font: 500 9px var(--font-ui);
+  color: var(--text-disabled);
+  text-transform: uppercase;
+}
+
+.pl-perform-meter-canvas {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-raised);
+  border-radius: 2px;
+}
+
+.pl-perform-popup {
+  position: fixed;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font: 500 12px var(--font-data);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 100;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.pl-perform-popup .fine-tag {
+  color: var(--signal-4);
+  margin-left: 6px;
+  font-size: 10px;
+}
 .pl-midi-key.is-active {
   background: var(--text-secondary);
   color: var(--canvas);

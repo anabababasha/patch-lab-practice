@@ -13,6 +13,8 @@ export function TopBar() {
   const setBpm = useApp((s) => s.setBpm);
   const sessionSync = useApp((s) => s.design.settings?.sync ?? false);
   const setSessionSync = useApp((s) => s.setSessionSync);
+  const performOpen = useApp((s) => s.ui.performOpen);
+  const setPerformOpen = useApp((s) => s.setPerformOpen);
   const toggleTransport = useApp((s) => s.toggleTransport);
   const undo = useApp((s) => s.undo);
   const redo = useApp((s) => s.redo);
@@ -119,6 +121,14 @@ export function TopBar() {
           title="Session tempo sync — the default for params on Auto"
         >
           Sync
+        </button>
+        <button
+          className={['pl-mini-btn', 'pl-sync-chip', performOpen ? 'is-on' : ''].join(' ')}
+          aria-pressed={performOpen}
+          onClick={() => setPerformOpen(!performOpen)}
+          title="Perform — fullscreen touch console over the live patch"
+        >
+          Perform
         </button>
       </div>
       </div>
