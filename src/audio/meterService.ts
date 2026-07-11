@@ -11,6 +11,8 @@ const FLOOR = -60;
 const CLIP_AT = -0.5; // dBFS
 const HOLD_MS = 1000;
 const FPS_INTERVAL = 1000 / 30;
+const ACTIVITY_FLOOR_DB = -50;
+const ACTIVITY_RELEASE_MS = 150;
 
 /**
  * One global rAF loop. Analysers are read and meters drawn straight to each
@@ -20,6 +22,8 @@ class MeterService {
   private analysers = new Map<string, AnalyserNode>(); // lookupKey -> analyser
   private canvases = new Map<string, { el: HTMLCanvasElement; lookup: string }>();
   private levels = new Map<string, Level>();
+  private activity = new Map<string, { live: boolean; releaseUntil: number }>();
+  private activityListeners = new Set<() => void>();
   private buf = new Float32Array(512);
   private last = 0;
   private running = false;
@@ -34,8 +38,38 @@ class MeterService {
     this.analysers = next;
     for (const id of this.levels.keys())
       if (!next.has(id)) this.levels.delete(id);
+
+    let activityChanged = false;
+    const liveNodeIds = new Set(Array.from(next.keys()).map((key) => key.split(':')[0]));
+    for (const id of this.activity.keys()) {
+      if (!liveNodeIds.has(id)) {
+        const wasLive = this.activity.get(id)?.live ?? false;
+        this.activity.delete(id);
+        activityChanged ||= wasLive;
+      }
+    }
+    if (activityChanged) this.notifyActivity();
+
     this.ensureRunning();
   }
+
+  subscribeActivity = (listener: () => void) => {
+    this.activityListeners.add(listener);
+    return () => {
+      this.activityListeners.delete(listener);
+    };
+  };
+
+  isLive = (nodeId: string) => this.activity.get(nodeId)?.live ?? false;
+
+  markActivity = (nodeId: string, now = performance.now()) => {
+    const current = this.activity.get(nodeId) ?? { live: false, releaseUntil: 0 };
+    this.activity.set(nodeId, {
+      live: true,
+      releaseUntil: Math.max(current.releaseUntil, now + ACTIVITY_RELEASE_MS),
+    });
+    if (!current.live) this.notifyActivity();
+  };
 
   attachCanvas(nodeId: string, el: HTMLCanvasElement | null, slot = 'node', analyserKey?: string) {
     const canvasKey = `${nodeId}|${slot}`;
@@ -66,12 +100,28 @@ class MeterService {
     };
   }
 
+  private updateActivity(nodeId: string, peakDb: number, now: number) {
+    const current = this.activity.get(nodeId) ?? { live: false, releaseUntil: 0 };
+    const aboveFloor = peakDb > ACTIVITY_FLOOR_DB;
+    const releaseUntil = aboveFloor ? now + ACTIVITY_RELEASE_MS : current.releaseUntil;
+    const live = aboveFloor || now < releaseUntil;
+    if (current.live !== live || current.releaseUntil !== releaseUntil) {
+      this.activity.set(nodeId, { live, releaseUntil });
+    }
+    return current.live !== live;
+  }
+
+  private notifyActivity() {
+    for (const listener of this.activityListeners) listener();
+  }
+
   private loop = (t: number) => {
     requestAnimationFrame(this.loop);
     if (t - this.last < FPS_INTERVAL) return;
     this.last = t;
     if (!this.colors) this.readColors();
 
+    let activityChanged = false;
     for (const [canvasKey, { el: canvas, lookup }] of this.canvases) {
       const an = this.analysers.get(lookup);
       let level = this.levels.get(lookup);
@@ -92,6 +142,9 @@ class MeterService {
         }
         const rmsDb = gainToDb(Math.sqrt(sum / this.buf.length), FLOOR);
         const peakDb = gainToDb(peak, FLOOR);
+        if (!lookup.includes(':')) {
+          activityChanged ||= this.updateActivity(lookup, peakDb, t);
+        }
         level.rmsDb = rmsDb;
         if (peakDb >= level.peakHoldDb || t >= level.holdUntil) {
           level.peakHoldDb = peakDb;
@@ -99,12 +152,16 @@ class MeterService {
         }
         if (peakDb >= CLIP_AT) level.clipUntil = t + HOLD_MS;
       } else {
+        if (!lookup.includes(':')) {
+          activityChanged ||= this.updateActivity(lookup, FLOOR, t);
+        }
         level.rmsDb = FLOOR;
         level.peakHoldDb = FLOOR;
       }
 
       this.draw(canvas, level, t);
     }
+    if (activityChanged) this.notifyActivity();
   };
 
   private draw(canvas: HTMLCanvasElement, level: Level, now: number) {

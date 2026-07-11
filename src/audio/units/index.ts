@@ -299,6 +299,9 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
   type SamplerVoice = {
     source: AudioBufferSourceNode;
     hitGain: GainNode;
+    startTime: number;
+    stopTime?: number;
+    cleanupTimer?: number;
     cleaned: boolean;
   };
 
@@ -307,22 +310,34 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
   const cleanupVoice = (voice: SamplerVoice) => {
     if (voice.cleaned) return;
     voice.cleaned = true;
+    if (voice.cleanupTimer !== undefined) window.clearTimeout(voice.cleanupTimer);
     try { pitchScale.disconnect(voice.source.detune); } catch {}
     disconnectNode(voice.source);
     disconnectNode(voice.hitGain);
     activeSet.delete(voice);
   };
 
-  const stopActive = () => {
-    const t = ctx.currentTime;
+  const scheduleCleanup = (voice: SamplerVoice, stopAt: number) => {
+    if (voice.cleanupTimer !== undefined) window.clearTimeout(voice.cleanupTimer);
+    const delayMs = Math.max(50, (stopAt - ctx.currentTime) * 1000 + 50);
+    voice.cleanupTimer = window.setTimeout(() => cleanupVoice(voice), delayMs);
+  };
+
+  const stopActive = (atTime = ctx.currentTime) => {
+    const t = Math.max(ctx.currentTime, atTime);
     const voices = Array.from(activeSet);
-    activeSet.clear();
 
     for (const voice of voices) {
       try {
-        voice.hitGain.gain.setTargetAtTime(0, t, 0.003);
-        voice.source.stop(t + 0.01);
-        window.setTimeout(() => cleanupVoice(voice), 50);
+        const stopAt = voice.startTime > t ? t : t + 0.01;
+        if (voice.stopTime !== undefined && voice.stopTime <= stopAt) continue;
+        if (voice.startTime <= t) {
+          voice.hitGain.gain.cancelScheduledValues(t);
+          voice.hitGain.gain.setTargetAtTime(0, t, 0.003);
+        }
+        voice.source.stop(stopAt);
+        voice.stopTime = stopAt;
+        scheduleCleanup(voice, stopAt);
       } catch {
         cleanupVoice(voice);
       }
@@ -334,11 +349,14 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
 
   const spawn = (time: number) => {
     if (disposed) return;
-    if (muted) return;
+    if (muted) {
+      if (activeSet.size > 0) stopActive();
+      return;
+    }
     const entry = mediaCache.get(nodeId);
     if (!entry) return;
     
-    if (choke) stopActive();
+    if (choke) stopActive(time);
     
     // Safety: ensure unit-level bus is trigger-ready in case it was ever mutated by transport stops
     level.gain.cancelScheduledValues(ctx.currentTime);
@@ -349,7 +367,7 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
     src.detune.value = tuneCents;
     const hitGain = ctx.createGain();
     hitGain.gain.value = 1;
-    const voice: SamplerVoice = { source: src, hitGain, cleaned: false };
+    const voice: SamplerVoice = { source: src, hitGain, startTime: time, cleaned: false };
     
     pitchScale.connect(src.detune);
     src.connect(hitGain);
@@ -371,8 +389,8 @@ export function createSampler(ctx: AudioContext, nodeId: string): AudioUnit {
     bind(id, v) {
       if (id === 'muted') {
         const m = v > 0.5;
-        if (m && !muted) stopActive();
         muted = m;
+        if (m && activeSet.size > 0) stopActive();
       }
       if (id === 'level') {
         volume = v;

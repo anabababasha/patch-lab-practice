@@ -541,16 +541,15 @@ export const useApp = create<AppState>((set, get) => {
         return;
       }
       const inKey = `${to.nodeId}:${to.pinId}`;
-      if (d.wires.some((w) => `${w.to.nodeId}:${w.to.pinId}` === inKey)) {
-        reject('Inputs accept one wire — use a Mixer to sum.');
-        return;
-      }
+      const existing = d.wires.find((w) => `${w.to.nodeId}:${w.to.pinId}` === inKey);
       // cycle check (node-level, conservative)
       const adj = new Map<string, string[]>();
-      for (const w of d.wires)
+      for (const w of d.wires) {
+        if (w.id === existing?.id) continue;
         (adj.get(w.from.nodeId) ?? adj.set(w.from.nodeId, []).get(w.from.nodeId)!).push(
           w.to.nodeId,
         );
+      }
       const stack = [to.nodeId];
       const seen = new Set<string>();
       let cyclic = false;
@@ -574,10 +573,25 @@ export const useApp = create<AppState>((set, get) => {
         id: uid('w'),
         from,
         to,
-        colorIndex: (d.wires.length % 4) + 1,
+        colorIndex: existing?.colorIndex ?? (d.wires.length % 4) + 1,
         kind: fromPin.kind,
       };
-      commitStructural({ ...d, wires: [...d.wires, wire] });
+      commitStructural({
+        ...d,
+        wires: existing
+          ? [...d.wires.filter((w) => w.id !== existing.id), wire]
+          : [...d.wires, wire],
+      });
+      if (existing) {
+        set((s) => ({
+          ui: {
+            ...s.ui,
+            selectedWireId:
+              s.ui.selectedWireId === existing.id ? wire.id : s.ui.selectedWireId,
+            toast: { id: Date.now(), msg: 'Replaced wire' },
+          },
+        }));
+      }
       retrace();
     },
 

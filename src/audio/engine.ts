@@ -30,6 +30,7 @@ class AudioEngine {
   private lastDesign: Design | null = null;
   private lastBuilt: Design | null = null;
   private fadePending = false;
+  private bindRetryTimers = new Map<string, number>();
   onStateChange: ((running: boolean) => void) | null = null;
 
   constructor() {
@@ -233,6 +234,17 @@ class AudioEngine {
     }
   }
 
+  private scheduleBindRetry(nodeId: string) {
+    window.clearTimeout(this.bindRetryTimers.get(nodeId));
+    const timer = window.setTimeout(() => {
+      this.bindRetryTimers.delete(nodeId);
+      const node = this.lastDesign?.nodes.find((n) => n.id === nodeId);
+      const unit = this.units.get(nodeId);
+      if (node && unit) this.bindUnitParams(unit, node);
+    }, 80);
+    this.bindRetryTimers.set(nodeId, timer);
+  }
+
   private physicalWireMap(wires: Wire[]) {
     const map = new Map<string, Wire>();
     for (const wire of wires) {
@@ -321,7 +333,13 @@ class AudioEngine {
       return;
     }
     const unit = this.units.get(nodeId);
-    if (!unit) return;
+    if (!unit) {
+      if (this.ctx) {
+        console.warn('[bind-drop]', nodeId, paramId, value);
+        this.scheduleBindRetry(nodeId);
+      }
+      return;
+    }
     const node = this.lastDesign?.nodes.find((n) => n.id === nodeId);
     const spec = node ? registry[node.type] : undefined;
     const pSpec = spec?.params.find((p) => p.id === paramId);
@@ -365,6 +383,7 @@ class AudioEngine {
   }
 
   emitTrigger(nodeId: string, pinId: string, time?: number) {
+    meterService.markActivity(nodeId);
     const handlers = this.triggerMap.get(`${nodeId}:${pinId}`);
     if (handlers) {
       for (const h of handlers) h(time);

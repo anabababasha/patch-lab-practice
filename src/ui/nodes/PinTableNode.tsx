@@ -211,6 +211,11 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
   const [midiVersion, setMidiVersion] = React.useState(0);
   const spec = node ? registry[node.type] : undefined;
   const midiStatus = React.useMemo(() => midiService.getStatus(), [midiVersion]);
+  const nodeLive = React.useSyncExternalStore(
+    meterService.subscribeActivity,
+    () => meterService.isLive(id),
+    () => false,
+  );
 
   const applyEqDrag = useCallback(
     (canvas: HTMLCanvasElement, clientX: number, clientY: number, band: EqBandControl) => {
@@ -599,10 +604,12 @@ function PinTableNodeImpl({ id }: NodeProps<PinTableNodeType>) {
         spec.display === 'sequencer' ? 'is-seq' : '',
         selected ? 'is-selected' : '',
         onPath ? 'on-path' : '',
+        nodeLive ? 'is-live' : '',
       ].join(' ')}
     >
       <div className="pl-node__header" style={{ height: HEADER_H }}>
         <span className="pl-node__title">{node.label}</span>
+        <span className={['pl-live-dot', nodeLive ? 'is-active' : ''].join(' ')} aria-hidden="true" />
         <canvas
           ref={canvasRef}
           className="pl-meter"

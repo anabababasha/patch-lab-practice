@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -22,11 +22,28 @@ import { NODE_WIDTH } from './constants';
 const nodeTypes: NodeTypes = { pinTable: PinTableNode };
 const edgeTypes: EdgeTypes = { signal: SignalEdge };
 
+type MarqueeDrag = {
+  pointerId: number;
+  paneRect: DOMRect;
+  startClientX: number;
+  startClientY: number;
+  startFlowX: number;
+  startFlowY: number;
+};
+
+type MarqueeBox = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 export function FlowCanvas() {
   const design = useApp((s) => s.design);
   const selectedNodeIds = useApp((s) => s.ui.selectedNodeIds);
   const selectedWireId = useApp((s) => s.ui.selectedWireId);
-  const { screenToFlowPosition } = useReactFlow();
+  const beginDrag = useApp((s) => s.beginDrag);
+  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow<PinTableNodeType, SignalEdgeType>();
 
   /*
    * React Flow (v12) keeps node internals (measured size, handle bounds) keyed
@@ -38,6 +55,8 @@ export function FlowCanvas() {
    */
   const nodeCacheRef = useRef(new Map<string, PinTableNodeType>());
   const measuredRef = useRef(new Map<string, { width: number; height: number }>());
+  const marqueeDragRef = useRef<MarqueeDrag | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeBox | null>(null);
 
   const activeLayerId = useApp((s) => s.ui.activeLayerId);
   const layers = useApp((s) => s.design.layers ?? [{ id: 'main', name: 'Main' }]);
@@ -95,7 +114,7 @@ export function FlowCanvas() {
           sourceHandle: w.from.pinId,
           target: w.to.nodeId,
           targetHandle: w.to.pinId,
-          data: { colorIndex: w.colorIndex, kind: w.kind ?? 'audio' },
+          data: { colorIndex: w.colorIndex, kind: w.kind ?? 'audio', sourceNodeId: w.from.nodeId },
           selected: w.id === selectedWireId,
         }));
     },
@@ -149,6 +168,101 @@ export function FlowCanvas() {
       useApp.getState().addNode(type, p.x - NODE_WIDTH / 2, p.y - 17);
     },
     [screenToFlowPosition],
+  );
+
+  const onPanePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 2 || e.pointerType !== 'mouse') return;
+      const target = e.target as HTMLElement | null;
+      if (!target?.classList.contains('react-flow__pane')) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const paneRect = target.getBoundingClientRect();
+      const flowStart = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      marqueeDragRef.current = {
+        pointerId: e.pointerId,
+        paneRect,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startFlowX: flowStart.x,
+        startFlowY: flowStart.y,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setMarquee({
+        left: e.clientX - paneRect.left,
+        top: e.clientY - paneRect.top,
+        width: 0,
+        height: 0,
+      });
+    },
+    [screenToFlowPosition],
+  );
+
+  const onPanePointerMove = useCallback((e: React.PointerEvent) => {
+    const drag = marqueeDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = drag.startClientX - drag.paneRect.left;
+    const startY = drag.startClientY - drag.paneRect.top;
+    const currentX = e.clientX - drag.paneRect.left;
+    const currentY = e.clientY - drag.paneRect.top;
+    setMarquee({
+      left: Math.min(startX, currentX),
+      top: Math.min(startY, currentY),
+      width: Math.abs(currentX - startX),
+      height: Math.abs(currentY - startY),
+    });
+  }, []);
+
+  const finishPaneMarquee = useCallback(
+    (e: React.PointerEvent, commit: boolean) => {
+      const drag = marqueeDragRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const moved =
+        Math.abs(e.clientX - drag.startClientX) >= 4 ||
+        Math.abs(e.clientY - drag.startClientY) >= 4;
+
+      if (commit && moved) {
+        const flowEnd = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        const rect = {
+          x: Math.min(drag.startFlowX, flowEnd.x),
+          y: Math.min(drag.startFlowY, flowEnd.y),
+          width: Math.abs(flowEnd.x - drag.startFlowX),
+          height: Math.abs(flowEnd.y - drag.startFlowY),
+        };
+        const visibleIds = new Set(visibleNodes.map((n) => n.id));
+        const ids = getIntersectingNodes(rect, true)
+          .map((n) => n.id)
+          .filter((id) => visibleIds.has(id));
+        useApp.getState().setSelectedNodes(ids);
+      }
+
+      if (e.currentTarget.hasPointerCapture(drag.pointerId)) {
+        e.currentTarget.releasePointerCapture(drag.pointerId);
+      }
+      marqueeDragRef.current = null;
+      setMarquee(null);
+    },
+    [getIntersectingNodes, screenToFlowPosition, visibleNodes],
+  );
+
+  const onPanePointerUp = useCallback(
+    (e: React.PointerEvent) => finishPaneMarquee(e, true),
+    [finishPaneMarquee],
+  );
+
+  const onPanePointerCancel = useCallback(
+    (e: React.PointerEvent) => finishPaneMarquee(e, false),
+    [finishPaneMarquee],
   );
 
   // keyboard: Delete/Backspace, Esc, Cmd/Ctrl+Z
@@ -210,13 +324,21 @@ export function FlowCanvas() {
       onConnect={onConnect}
       isValidConnection={() => true}
       onNodeClick={(_, n) => useApp.getState().setSelectedNodes([n.id])}
-      onNodeDragStart={() => useApp.getState().beginDrag()}
+      onNodeDragStart={() => beginDrag()}
+      onSelectionDragStart={() => beginDrag()}
       onPaneClick={() => useApp.getState().clearSelection()}
+      onPaneContextMenu={(e) => e.preventDefault()}
+      onPointerDownCapture={onPanePointerDown}
+      onPointerMoveCapture={onPanePointerMove}
+      onPointerUpCapture={onPanePointerUp}
+      onPointerCancelCapture={onPanePointerCancel}
       onDrop={onDrop}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
       }}
+      panOnDrag
+      selectionOnDrag={false}
       selectionMode={SelectionMode.Partial}
       // pin clicks pin the trace (the signature interaction) — connecting is drag-only
       connectOnClick={false}
@@ -242,6 +364,17 @@ export function FlowCanvas() {
         bgColor="#0E1116"
       />
       <Controls showInteractive={false} />
+      {marquee && (
+        <div
+          className="pl-marquee"
+          style={{
+            left: marquee.left,
+            top: marquee.top,
+            width: marquee.width,
+            height: marquee.height,
+          }}
+        />
+      )}
       {design.nodes.length === 0 && (
         <div className="pl-empty-canvas">
           Drag components from the left — or load an example from the panel →

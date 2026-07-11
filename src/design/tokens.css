@@ -255,6 +255,8 @@ body {
 }
 
 .pl-node__title {
+  flex: 1;
+  min-width: 0;
   font: 600 13px var(--font-ui);
   color: var(--text-primary);
   white-space: nowrap;
@@ -272,6 +274,20 @@ body {
   border-radius: 2px;
   border: 1px solid var(--border);
   flex: none;
+}
+
+.pl-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-disabled);
+  flex: none;
+  transition: background 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+.pl-live-dot.is-active {
+  background: var(--signal-1);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--signal-1) 45%, transparent);
 }
 
 /* --------------------------------------------------------- pin rows */
@@ -385,6 +401,12 @@ body {
   animation: pl-glow-in 120ms ease-out;
 }
 
+.pl-edge-glow.is-live-only {
+  stroke-width: 5;
+  opacity: 0.18;
+  filter: blur(1.5px);
+}
+
 @keyframes pl-glow-in {
   from {
     opacity: 0;
@@ -400,6 +422,35 @@ body {
   stroke-width: 14;
   pointer-events: stroke;
   cursor: pointer;
+}
+
+.pl-edge-x {
+  min-width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transition:
+    border-color 120ms ease-out,
+    color 120ms ease-out,
+    background 120ms ease-out;
+}
+
+.pl-edge-x:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface-raised));
 }
 
 .pl-edge.is-control {
@@ -1099,8 +1150,22 @@ body {
   cursor: grab;
 }
 
+.react-flow__node.selected {
+  box-shadow: none;
+  outline: none;
+}
+
 .react-flow__node.dragging {
   cursor: grabbing;
+}
+
+.pl-marquee {
+  position: absolute;
+  pointer-events: none;
+  z-index: 15;
+  border: 1px solid var(--border-active);
+  background: color-mix(in srgb, var(--border-active) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 /* ----------------------------------------------------------- empty canvas */
@@ -1352,6 +1417,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pl-edge,
   .pl-handle::after,
+  .pl-live-dot,
   .pl-node,
   .pl-btn,
   .pl-name,

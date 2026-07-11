@@ -132,20 +132,40 @@ export function validateDesign(design: Design, audioRunning = true): Issue[] {
       }
     }
 
-    // Rule 5: Mod input HAS wire but modAmt is 0
+    // Rule 5: Mod input HAS wire but Mod Amt is inert
     const modInPin = spec.pins.find((p) => p.direction === 'in' && p.kind === 'control' && p.id === 'mod');
-    if (modInPin) {
+    const modAmtParam = spec.params.find((p) => p.id === 'modAmt');
+    if (modInPin && modAmtParam) {
       const key = `${node.id}:mod`;
-      if (inWires.has(key) && inWires.get(key)!.length > 0) {
-        const modAmt = node.params['modAmt'] ?? spec.params.find(p => p.id === 'modAmt')?.default ?? 0;
+      const hasControlModWire = wires.some(
+        (w) =>
+          (w.kind ?? 'audio') === 'control' &&
+          w.to.nodeId === node.id &&
+          w.to.pinId === 'mod',
+      );
+      if (inWires.has(key) && hasControlModWire) {
+        const modAmt = node.params[modAmtParam.id] ?? modAmtParam.default;
         if (modAmt === 0) {
           issues.push({
             id: `mod-amt-zero-${node.id}`,
             severity: 'info',
-            message: `${node.label} receives modulation but Mod Amt is 0 % — raise it to hear the effect.`,
+            message: 'Mod input is wired but Mod Amt is 0 — the modulator has no effect.',
             nodeId: node.id,
             pin: { nodeId: node.id, pinId: 'mod' },
           });
+        }
+        if (node.type === 'gain') {
+          const gainParam = spec.params.find((p) => p.id === 'gain');
+          const gain = node.params.gain ?? gainParam?.default ?? 0;
+          if (gain > -40) {
+            issues.push({
+              id: `gain-mod-base-open-${node.id}`,
+              severity: 'info',
+              message: 'Base level and Mod add together — for VCA-style gating set Gain low and raise Mod Amt.',
+              nodeId: node.id,
+              pin: { nodeId: node.id, pinId: 'mod' },
+            });
+          }
         }
       }
     }
